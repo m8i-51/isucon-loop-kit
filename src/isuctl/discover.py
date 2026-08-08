@@ -6,9 +6,11 @@ from isuctl.config import Host, IsuconConfig, SshConfig, load_config, save_confi
 from isuctl.remote import run_ssh
 
 PROBE_COMMAND = """set -e
+APP_DIR=""
 for d in /home/isucon/webapp /home/isucon/isunum /home/isucon; do
-  if [ -d "$d" ]; then echo "$d"; break; fi
+  if [ -d "$d" ]; then APP_DIR="$d"; break; fi
 done
+printf '%s\\n' "$APP_DIR"
 (systemctl is-active nginx 2>/dev/null || echo inactive)
 (systemctl is-active mysql 2>/dev/null || systemctl is-active mysqld 2>/dev/null || echo inactive)
 """
@@ -16,13 +18,13 @@ done
 
 def discover_host(ssh: SshConfig, host: Host) -> dict[str, object]:
     result = run_ssh(ssh, host, PROBE_COMMAND)
-    lines = result.stdout.strip().splitlines()
+    lines = result.stdout.rstrip().splitlines()
     app_dir = lines[0].strip() if len(lines) > 0 else ""
     nginx_status = lines[1].strip() if len(lines) > 1 else "inactive"
     mysql_status = lines[2].strip() if len(lines) > 2 else "inactive"
 
     roles: list[str] = []
-    if app_dir:
+    if app_dir.startswith("/"):
         roles.append("app")
     if nginx_status == "active":
         roles.append("web")
@@ -30,7 +32,7 @@ def discover_host(ssh: SshConfig, host: Host) -> dict[str, object]:
         roles.append("db")
 
     updates: dict[str, object] = {"role": roles}
-    if app_dir:
+    if app_dir.startswith("/"):
         updates["remote_app_dir"] = app_dir
     return updates
 
