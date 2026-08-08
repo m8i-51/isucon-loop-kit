@@ -20,6 +20,12 @@ isuctl = "isuctl.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/isuctl"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/isuctl/templates/*.conf",
+  "src/isuctl/templates/*.cnf",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

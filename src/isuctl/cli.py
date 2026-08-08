@@ -3,6 +3,7 @@ from pathlib import Path
 import typer
 
 from isuctl import __version__
+from isuctl.bootstrap import run_bootstrap
 from isuctl.config import (
     Host,
     IsuconConfig,
@@ -107,6 +108,16 @@ def rollback(
         typer.secho(str(exc), fg=typer.colors.RED)
         raise typer.Exit(1) from exc
     typer.echo(f"rolled back to {git_ref} and deployed")
+
+
+@app.command("bootstrap")
+def bootstrap(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+) -> None:
+    run_bootstrap(config)
+    typer.echo("bootstrapped")
 
 
 @app.command("snapshot")

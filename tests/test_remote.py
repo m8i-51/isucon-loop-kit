@@ -7,6 +7,7 @@ from isuctl.config import Host, SshConfig
 from isuctl.remote import (
     RemoteError,
     rsync_file_from_remote,
+    rsync_file_to_remote,
     rsync_from_remote,
     rsync_to_remote,
     run_ssh,
@@ -66,6 +67,20 @@ def test_rsync_file_from_remote(tmp_path: Path):
         assert "isucon@10.0.0.1:/home/isucon/webapp/schema.sql" in cmd
         assert str(local) in cmd
         assert "isucon@10.0.0.1:/home/isucon/webapp/schema.sql/" not in cmd
+
+
+def test_rsync_file_to_remote(tmp_path: Path):
+    host = Host(name="a", host="10.0.0.1", role=["app"])
+    ssh = SshConfig(user="isucon", key="/tmp/key")
+    local = tmp_path / "nginx_ltsv.conf"
+    local.write_text("log_format ltsv", encoding="utf-8")
+    with patch("isuctl.remote.subprocess.run") as run:
+        run.return_value = type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        rsync_file_to_remote(ssh, host, local, "/home/isucon/isuctl/nginx_ltsv.conf")
+        cmd = run.call_args[0][0]
+        assert cmd[0] == "rsync"
+        assert str(local) in cmd
+        assert "isucon@10.0.0.1:/home/isucon/isuctl/nginx_ltsv.conf" in cmd
 
 
 def test_rsync_from_remote(tmp_path: Path):

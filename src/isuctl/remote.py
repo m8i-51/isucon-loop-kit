@@ -69,6 +69,16 @@ def rsync_file_from_remote(
     _rsync(ssh, source, str(local_file), None)
 
 
+def rsync_file_to_remote(
+    ssh: SshConfig,
+    host: Host,
+    local_file: Path,
+    remote_file: str,
+) -> None:
+    dest = f"{ssh.user}@{host.host}:{remote_file}"
+    _rsync(ssh, str(local_file), dest, None)
+
+
 def rsync_from_remote(
     ssh: SshConfig,
     host: Host,
