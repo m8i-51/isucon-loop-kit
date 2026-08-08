@@ -9,3 +9,4 @@ out/
 .isucon-ready
 *.pem
 isucon.toml
+env.sh
