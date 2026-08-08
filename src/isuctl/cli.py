@@ -12,6 +12,7 @@ from isuctl.config import (
     save_config,
 )
 from isuctl.discover import run_discover
+from isuctl.snapshot import run_snapshot
 from isuctl.sync_down import run_sync_down
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -73,6 +74,17 @@ def sync_down(
 ) -> None:
     local_dir = run_sync_down(config)
     typer.echo(f"synced to {local_dir}")
+
+
+@app.command("snapshot")
+def snapshot(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+    label: str | None = typer.Option(None, "--label", "-l", help="Optional snapshot label"),
+) -> None:
+    remote_path = run_snapshot(config, label=label)
+    typer.echo(f"snapshot: {remote_path}")
 
 
 # placeholder so imports stay stable; real commands added in later tasks
