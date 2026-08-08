@@ -6,7 +6,7 @@
 
 ## なにをするか
 
-競技サーバを正として、次のループを回す薄い CLI です。
+**手元マシン（laptop）** から SSH/rsync で競技 EC2 を操作する薄い CLI です。競技サーバ上で動かすものではありません。
 
 ```text
 discover → sync-down → ローカル編集 → deploy → bench → pull → analyze → pack
@@ -14,33 +14,64 @@ discover → sync-down → ローカル編集 → deploy → bench → pull → 
 
 重いダッシュボードは作らず、可視化は laptop 側の pprotein などを使う前提です。
 
-## セットアップ
+## 前提
+
+- Python **3.12+**
+- `ssh` / `rsync`（macOS / Linux なら普通にある）
+- 競技 EC2 へ入れる SSH 鍵
+- （任意）手元に `alp` / `pt-query-digest`。無くても analyze はフォールバックする
+
+## セットアップ（本番でもこれ）
 
 ```bash
+git clone https://github.com/m8i-51/isucon-loop-kit.git
+cd isucon-loop-kit
+
 python3.12 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows なら .venv\Scripts\activate
+pip install -e .
+```
+
+開発（pytest など）するときだけ:
+
+```bash
 pip install -e ".[dev]"
+```
+
+動作確認:
+
+```bash
+isuctl --help
 ```
 
 ## 典型フロー
 
 ```bash
+# リポジトリ直下で（isucon.toml がここに作られる）
 isuctl init-config --host HOST --key ~/.ssh/YOUR_KEY
-isuctl ensure-access
+isuctl ensure-access          # AMI が ubuntu→isucon 鍵コピー必要なとき
 isuctl discover
 isuctl sync-down
 isuctl snapshot
-isuctl bootstrap
+isuctl bootstrap              # nginx LTSV / MySQL slow / alp など
 
-# ローカルで編集したあと
+# ローカル work/ を編集したあと
 isuctl deploy
 
-# ベンチ後
+# ベンチは EC2 上で実行 → 終わったら手元で
 isuctl pull
 isuctl analyze
 isuctl pack
 isuctl bench-note SCORE --note "memo"
 ```
+
+`init-config` の既定は `user=isucon` / `bootstrap_user=ubuntu`。鍵パスは自分のものを指定する。
+
+## 注意
+
+- `isucon.toml` / `work/` / `out/` / 鍵は git 管理外。クローンしたマシンで毎回作り直す
+- ベンチ本体は EC2 上で叩く（`isuctl` はベンチ起動まではしない）
+- 監視 EC2 を競技 VPC に同居させない（pprotein は laptop）
 
 ## ドキュメント
 
