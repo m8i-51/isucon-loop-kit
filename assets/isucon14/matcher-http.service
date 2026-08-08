@@ -1,15 +1,15 @@
-# Drop-in style unit for ISUCON14 dogfood / early practice.
-# Bypass nginx+TLS so matching does not stall under load (CODE=32).
+# ISUCON14 犬食い / 初期練習向け matcher unit 例
+# nginx+TLS を経由せずアプリ :8080 を直接叩く（CODE=32 回避）
 #
-# Install:
+# 入れ方:
 #   sudo cp assets/isucon14/matcher-http.service /etc/systemd/system/isuride-matcher.service
-#   # or merge ExecStart into the existing unit
-#   echo 'ISUCON_MATCHING_INTERVAL=0.05' >> /home/isucon/env.sh   # or edit in place
+#   # または既存 unit の ExecStart だけ差し替え
+#   # ~/env.sh の ISUCON_MATCHING_INTERVAL=0.05
 #   sudo systemctl daemon-reload
 #   sudo systemctl restart isuride-matcher
 
 [Unit]
-Description=isuride-matcher (direct to app :8080)
+Description=isuride-matcher (app :8080 直叩き)
 After=isuride-go.service
 
 [Service]

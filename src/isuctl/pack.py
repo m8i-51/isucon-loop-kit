@@ -208,7 +208,7 @@ def _find_schema_file(local_dir: Path) -> Path | None:
 
 def _schema_excerpt(schema_path: Path | None, table_names: list[str]) -> str:
     if schema_path is None:
-        return "_No schema.sql found in local project._\n"
+        return "_ローカルプロジェクトに schema.sql が見つかりません。_\n"
 
     lines = schema_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     if not table_names:
@@ -240,7 +240,7 @@ def _schema_excerpt(schema_path: Path | None, table_names: list[str]) -> str:
 
 
 def _format_top_endpoints(alp_data: list[dict[str, float | int | str]]) -> str:
-    lines = ["| Rank | URI | Count | Sum Time | Avg Time |", "| --- | --- | ---: | ---: | ---: |"]
+    lines = ["| 順位 | URI | 回数 | 合計時間 | 平均時間 |", "| --- | --- | ---: | ---: | ---: |"]
     for rank, entry in enumerate(alp_data[:TOP_N], start=1):
         uri = str(entry["uri"])
         count = int(entry["count"])
@@ -251,27 +251,27 @@ def _format_top_endpoints(alp_data: list[dict[str, float | int | str]]) -> str:
         )
     if len(alp_data) > TOP_N:
         lines.append("")
-        lines.append(f"_Showing top {TOP_N} of {len(alp_data)} endpoints._")
+        lines.append(f"_上位 {TOP_N} / 全 {len(alp_data)} エンドポイントを表示_")
     if not alp_data:
-        lines.append("| - | _no access log data_ | 0 | 0 | 0 |")
+        lines.append("| - | _アクセスログなし_ | 0 | 0 | 0 |")
     return "\n".join(lines) + "\n"
 
 
 def _format_top_sqls(sql_lines: list[str]) -> str:
     if not sql_lines:
-        return "_No SQL statements extracted from slow log._\n"
+        return "_slow log から SQL を抽出できませんでした。_\n"
     lines: list[str] = []
     for rank, sql in enumerate(sql_lines[:TOP_N], start=1):
         lines.append(f"{rank}. `{_truncate_sql_for_display(sql)}`")
     if len(sql_lines) > TOP_N:
         lines.append("")
-        lines.append(f"_Showing top {TOP_N} of {len(sql_lines)} queries._")
+        lines.append(f"_上位 {TOP_N} / 全 {len(sql_lines)} クエリを表示_")
     return "\n".join(lines) + "\n"
 
 
 def _format_candidate_locations(paths: list[str]) -> str:
     if not paths:
-        return "_No candidate files matched endpoint or table heuristics._\n"
+        return "_エンドポイント / テーブル名ヒューリスティックに一致する候補ファイルなし。_\n"
     return "\n".join(f"- `{path}`" for path in paths[:TOP_N]) + "\n"
 
 
@@ -279,14 +279,14 @@ def _format_hypotheses(
     alp_data: list[dict[str, float | int | str]],
     table_names: list[str],
 ) -> str:
-    lines = ["- [ ] Profile and optimize the slowest endpoints"]
+    lines = ["- [ ] 最も遅いエンドポイントをプロファイルして改善する"]
     if table_names:
         tables = ", ".join(table_names[:3])
-        lines.append(f"- [ ] Add indexes or rewrite queries touching `{tables}`")
+        lines.append(f"- [ ] `{tables}` に触るクエリの index / 書き換えを検討する")
     if alp_data:
         top_uri = str(alp_data[0]["uri"])
-        lines.append(f"- [ ] Trace handler and DB calls for `{top_uri}`")
-    lines.append("- [ ] Re-benchmark after changes and compare scores.jsonl")
+        lines.append(f"- [ ] `{top_uri}` のハンドラと DB 呼び出しを追う")
+    lines.append("- [ ] 変更後に再ベンチし scores.jsonl と比較する")
     return "\n".join(lines) + "\n"
 
 
@@ -303,21 +303,21 @@ def _build_pack_md(
     schema_path = _find_schema_file(local_dir)
 
     sections = [
-        "# ISUCON Analysis Pack",
+        "# ISUCON 分析パック",
         "",
-        "## Top Endpoints",
+        "## 遅いエンドポイント",
         "",
         _format_top_endpoints(alp_data),
-        "## Top SQLs",
+        "## 遅い SQL",
         "",
         _format_top_sqls(sql_lines),
-        "## Candidate Code Locations",
+        "## 候補コード位置",
         "",
         _format_candidate_locations(candidate_paths),
-        "## Schema Excerpt",
+        "## スキーマ抜粋",
         "",
         _schema_excerpt(schema_path, table_names),
-        "## Next Hypotheses",
+        "## 次の仮説",
         "",
         _format_hypotheses(alp_data, table_names),
     ]
@@ -328,15 +328,15 @@ def run_pack(config_path: Path, analyze_dir: Path | None = None) -> Path:
     config = load_config(config_path)
     if analyze_dir is not None:
         if not analyze_dir.exists():
-            raise ValueError(f"analyze directory does not exist: {analyze_dir}")
+            raise ValueError(f"analyze ディレクトリがありません: {analyze_dir}")
         if not analyze_dir.is_dir():
-            raise ValueError(f"analyze path is not a directory: {analyze_dir}")
+            raise ValueError(f"analyze パスがディレクトリではありません: {analyze_dir}")
         source_dir = analyze_dir
     else:
         source_dir = _latest_analyze_dir()
         if source_dir is None:
             raise ValueError(
-                "no analyze directory found; run analyze first or pass --analyze-dir"
+                "analyze ディレクトリがありません。先に analyze するか --analyze-dir を指定してください"
             )
 
     alp_path = source_dir / "alp.json"

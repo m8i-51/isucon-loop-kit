@@ -123,7 +123,7 @@ def test_run_bootstrap_picks_first_app_host(tmp_path: Path):
 
 def test_run_bootstrap_requires_hosts(tmp_path: Path):
     cfg_path = _write_config(tmp_path, hosts=[])
-    with pytest.raises(ValueError, match="at least one host"):
+    with pytest.raises(ValueError, match="ホストが1つ以上"):
         run_bootstrap(cfg_path)
 
 
@@ -160,4 +160,4 @@ def test_cli_bootstrap_command(tmp_path: Path, monkeypatch):
 
     assert result.exit_code == 0
     run_bootstrap_mock.assert_called_once_with(cfg_path)
-    assert "bootstrapped" in result.stdout.lower()
+    assert "bootstrap 完了" in result.stdout

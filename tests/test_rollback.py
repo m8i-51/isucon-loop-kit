@@ -76,7 +76,7 @@ def test_rollback_requires_hosts(tmp_path: Path, monkeypatch):
         patch("isuctl.rollback.subprocess.run", side_effect=fake_run),
         patch("isuctl.rollback.run_deploy"),
     ):
-        with pytest.raises(ValueError, match="at least one host"):
+        with pytest.raises(ValueError, match="ホストが1つ以上"):
             run_rollback(cfg_path)
 
     assert git_calls == []

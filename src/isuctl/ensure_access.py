@@ -9,21 +9,21 @@ from isuctl.remote import run_ssh
 
 
 def run_ensure_access(config_path: Path) -> None:
-    """Copy SSH authorized_keys from bootstrap_user to contest user (isucon).
+    """bootstrap_user の authorized_keys を競技ユーザーへコピーする。
 
-    Typical AMI flow: login works as ubuntu, but isucon has no key yet.
+    典型的な AMI では ubuntu で入れるが、isucon には鍵がまだない。
     """
     config = load_config(config_path)
     if not config.hosts:
-        raise ValueError("config must have at least one host")
+        raise ValueError("config にホストが1つ以上必要です")
 
     host = primary_host(config.hosts)
     contest_user = config.ssh.user
     bootstrap_user = config.ssh.bootstrap_user
     if not bootstrap_user or bootstrap_user == contest_user:
         print(
-            "ensure-access: bootstrap_user unset or same as user; "
-            "nothing to do (set [ssh].bootstrap_user = \"ubuntu\")"
+            "ensure-access: bootstrap_user 未設定、または user と同じです。"
+            ' 何もしません（[ssh].bootstrap_user = "ubuntu" を設定）'
         )
         return
 
@@ -41,10 +41,9 @@ def run_ensure_access(config_path: Path) -> None:
     )
     run_ssh(bootstrap_ssh, host, cmd, check=True)
 
-    # Verify contest user SSH works with the same key.
     probe = run_ssh(config.ssh, host, "true", check=False)
     if probe.returncode != 0:
         raise RuntimeError(
-            f"ensure-access copied keys but {contest_user}@{host.host} still fails SSH"
+            f"ensure-access: 鍵はコピーしたが {contest_user}@{host.host} への SSH が失敗"
         )
-    print(f"ensure-access: {contest_user}@{host.host} is reachable")
+    print(f"ensure-access: {contest_user}@{host.host} に接続できます")

@@ -43,8 +43,8 @@ def _upload_snippets(ssh, host: Host) -> None:
 
 def _print_include_instructions() -> None:
     print(
-        f"MySQL slow query snippet uploaded to {MYSQL_REMOTE_SNIPPET}.\n"
-        f"Nginx LTSV access log target: {ACCESS_LTSV_LOG}"
+        f"MySQL slow query snippet をアップロード: {MYSQL_REMOTE_SNIPPET}\n"
+        f"Nginx LTSV アクセスログ先: {ACCESS_LTSV_LOG}"
     )
 
 
@@ -79,7 +79,7 @@ def _install_alp(ssh, host: Host) -> None:
         "case \"$ARCH\" in "
         "x86_64) ALP_ARCH=amd64 ;; "
         "aarch64|arm64) ALP_ARCH=arm64 ;; "
-        "*) echo \"bootstrap: unsupported arch for alp: $ARCH\"; exit 0 ;; "
+        "*) echo \"bootstrap: alp 非対応アーキテクチャ: $ARCH\"; exit 0 ;; "
         "esac; "
         f"URL=\"https://github.com/tkuchiki/alp/releases/download/v{ALP_VERSION}/alp_linux_${{ALP_ARCH}}.tar.gz\"; "
         "TMP=$(mktemp -d); "
@@ -88,7 +88,7 @@ def _install_alp(ssh, host: Host) -> None:
         "tar xzf \"$TMP/alp.tar.gz\" -C \"$TMP\" && "
         f"install \"$TMP/alp\" {ALP_INSTALL_DIR}/alp; "
         "else "
-        f"echo \"bootstrap: failed to download alp from $URL\"; "
+        f"echo \"bootstrap: alp のダウンロード失敗: $URL\"; "
         "fi; "
         "rm -rf \"$TMP\""
     )
@@ -102,9 +102,9 @@ def _install_pt_query_digest(ssh, host: Host) -> None:
         "if command -v apt-get >/dev/null 2>&1; then "
         "sudo apt-get update -qq >/tmp/isuctl-apt-update.log 2>&1 || true; "
         "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y percona-toolkit >/tmp/isuctl-pt-install.log 2>&1 || "
-        "echo 'bootstrap: apt install percona-toolkit failed (see /tmp/isuctl-pt-install.log)'; "
+        "echo 'bootstrap: apt install percona-toolkit 失敗 (/tmp/isuctl-pt-install.log を確認)'; "
         "else "
-        "echo 'bootstrap: pt-query-digest missing and apt-get unavailable'; "
+        "echo 'bootstrap: pt-query-digest がなく apt-get も使えません'; "
         "fi"
     )
     run_ssh(ssh, host, cmd, check=False)
@@ -113,7 +113,7 @@ def _install_pt_query_digest(ssh, host: Host) -> None:
 def run_bootstrap(config_path: Path) -> None:
     config = load_config(config_path)
     if not config.hosts:
-        raise ValueError("config must have at least one host")
+        raise ValueError("config にホストが1つ以上必要です")
 
     host = primary_host(config.hosts)
     _ensure_remote_dirs(config.ssh, host)

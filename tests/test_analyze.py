@@ -91,7 +91,7 @@ def test_run_analyze_python_fallback(tmp_path: Path, monkeypatch):
     assert alp[0]["sum_time"] == pytest.approx(1.2)
 
     slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
-    assert "pt-query-digest not available" in slow_txt
+    assert "pt-query-digest なし" in slow_txt
     assert "SELECT * FROM users" in slow_txt
 
     summary = (out_dir / "summary.md").read_text(encoding="utf-8")
@@ -123,7 +123,7 @@ def test_run_analyze_uses_latest_raw_dir(tmp_path: Path, monkeypatch):
 
 def test_run_analyze_requires_raw_dir(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(ValueError, match="no raw log directory"):
+    with pytest.raises(ValueError, match="生ログディレクトリがありません"):
         run_analyze(None)
 
 
@@ -152,7 +152,7 @@ def test_run_analyze_rejects_empty_logs(tmp_path: Path, monkeypatch):
     raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
     raw_dir.mkdir(parents=True)
 
-    with pytest.raises(ValueError, match="no access.log or slow log content"):
+    with pytest.raises(ValueError, match="access.log / slow log"):
         run_analyze(raw_dir)
 
 

@@ -50,4 +50,4 @@ def test_cli_bench_note_command(tmp_path: Path, monkeypatch):
 
     assert result.exit_code == 0
     run_bench_note_mock.assert_called_once_with(5000, note="ok")
-    assert "recorded to" in result.stdout
+    assert "記録先" in result.stdout

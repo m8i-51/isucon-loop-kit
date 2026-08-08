@@ -1,22 +1,22 @@
-# ISUCON Loop Kit Implementation Plan
+# ISUCON Loop Kit 実装プラン
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **エージェント向け:** タスク単位実装には superpowers:subagent-driven-development（推奨）または superpowers:executing-plans を使う。進捗は `- [ ]` で追跡。
 
-**Goal:** Build a solo-operator CLI (`isuctl`) that pulls ISUCON code from EC2, deploys fast, and produces alp/slow-query analysis packs for the measure→fix loop.
+**ゴール:** ソロ運用向け CLI（`isuctl`）を作り、EC2 からコードを引き、高速デプロイし、alp / slow-query の分析パックで計測→改善ループを回す。
 
-**Architecture:** A Python Typer CLI reads/writes `isucon.toml`, talks to hosts via SSH + rsync wrappers, and writes normalized artifacts under `out/`. Visualization uses pprotein (docs + helper scripts), not a custom full dashboard. Deploy is blocked until `sync-down` has marked the project ready.
+**構成:** Python Typer CLI が `isucon.toml` を読み書きし、SSH + rsync でホストと通信し、正規化した成果物を `out/` に書く。可視化は pprotein（ドキュメント + 補助）で、フルダッシュボードは自作しない。`sync-down` 済みになるまで `deploy` は拒否する。
 
-**Tech Stack:** Python 3.12+, Typer, pydantic v2, pytest, ruff; system tools: ssh, rsync, alp, pt-query-digest (invoked as subprocesses).
+**技術:** Python 3.12+、Typer、pydantic v2、pytest、ruff。システムツール: ssh、rsync、alp、pt-query-digest（subprocess）。
 
-## Global Constraints
+## 全体制約
 
 - Python >= 3.12
-- Primary contest language assumption: Python webapp
-- No GitHub Actions as the deploy path
-- `deploy` must refuse to run before successful `sync-down` (or explicit `--force` only in tests/emergency)
-- Keep files small and single-purpose; no inline imports
-- Japanese UI copy is fine for CLI help text; code identifiers stay English
-- Dogfood target: ISUCON14 AMI (`ami-0e334c50145a3ee41` or matsuu alternative)
+- 当日アプリの主言語想定: Python webapp
+- デプロイ経路に GitHub Actions を使わない
+- `deploy` は成功した `sync-down` 前は拒否（`--force` はテスト/緊急のみ）
+- ファイルは小さく単一目的。インライン import 禁止
+- CLI のユーザー向け文言は日本語。識別子は英語のまま
+- 犬食い対象: ISUCON14 AMI（`ami-0e334c50145a3ee41` または matsuu 代替）
 
 ---
 

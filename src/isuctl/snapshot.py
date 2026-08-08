@@ -24,7 +24,7 @@ def _snapshot_name(timestamp: str, label: str | None) -> str:
 def run_snapshot(config_path: Path, label: str | None = None) -> str:
     config = load_config(config_path)
     if not config.hosts:
-        raise ValueError("config must have at least one host")
+        raise ValueError("config にホストが1つ以上必要です")
 
     host = _primary_host(config.hosts)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")

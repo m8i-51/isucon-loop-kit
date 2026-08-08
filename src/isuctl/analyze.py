@@ -163,8 +163,8 @@ def _truncate_slow_output(text: str) -> str:
         return text
     return (
         text[:SLOW_DIGEST_MAX_CHARS]
-        + "\n\n# truncated by isuctl analyze "
-        f"(limit {SLOW_DIGEST_MAX_CHARS} chars)\n"
+        + "\n\n# isuctl analyze により切り詰め "
+        f"（上限 {SLOW_DIGEST_MAX_CHARS} 文字）\n"
     )
 
 
@@ -233,13 +233,13 @@ def _fallback_slow_summary(slow_log: Path) -> str:
         lines = slow_log.read_text(encoding="utf-8", errors="ignore").splitlines()
         excerpt = "\n".join(lines[:SLOW_FALLBACK_LINES])
         return (
-            "# pt-query-digest not available; no ranked app queries found. "
-            f"Showing first {SLOW_FALLBACK_LINES} lines\n\n{excerpt}\n"
+            "# pt-query-digest なし。アプリ向けクエリを抽出できませんでした。"
+            f"先頭 {SLOW_FALLBACK_LINES} 行を表示します\n\n{excerpt}\n"
         )
 
     entries.sort(key=lambda item: item[0], reverse=True)
     lines = [
-        "# pt-query-digest not available; ranked by Query_time (bulk INSERT dumps skipped)",
+        "# pt-query-digest なし。Query_time 順（巨大 INSERT は除外）",
         "",
     ]
     for rank, (query_time, sql) in enumerate(entries[:SLOW_FALLBACK_TOP_N], start=1):
@@ -247,7 +247,7 @@ def _fallback_slow_summary(slow_log: Path) -> str:
         lines.append(sql.rstrip(";") + ";")
         lines.append("")
     if len(entries) > SLOW_FALLBACK_TOP_N:
-        lines.append(f"_Showing top {SLOW_FALLBACK_TOP_N} of {len(entries)} queries._")
+        lines.append(f"_上位 {SLOW_FALLBACK_TOP_N} / 全 {len(entries)} クエリを表示_")
         lines.append("")
     return "\n".join(lines)
 
@@ -266,15 +266,15 @@ def _write_summary(
     access_log: Path | None,
     slow_log: Path | None,
 ) -> str:
-    lines = ["# Analysis Summary", ""]
+    lines = ["# 解析サマリ", ""]
     if access_log is not None:
-        lines.append(f"- Access log: `{access_log.name}`")
+        lines.append(f"- アクセスログ: `{access_log.name}`")
     if slow_log is not None:
-        lines.append(f"- Slow log: `{slow_log.name}`")
+        lines.append(f"- slow ログ: `{slow_log.name}`")
     lines.append("")
-    lines.append("## Top Endpoints (by total request_time)")
+    lines.append("## 遅いエンドポイント（request_time 合計）")
     lines.append("")
-    lines.append("| Rank | URI | Count | Sum Time | Avg Time |")
+    lines.append("| 順位 | URI | 回数 | 合計時間 | 平均時間 |")
     lines.append("| --- | --- | ---: | ---: | ---: |")
     for rank, entry in enumerate(alp_data, start=1):
         uri = str(entry.get("uri", ""))
@@ -285,12 +285,12 @@ def _write_summary(
             f"| {rank} | `{uri}` | {count} | {sum_time:.3f} | {avg_time:.3f} |"
         )
     lines.append("")
-    lines.append("## Slow Query Notes")
+    lines.append("## Slow Query メモ")
     lines.append("")
-    if "pt-query-digest not available" in slow_txt:
-        lines.append("- pt-query-digest was not available; see `slow.txt` excerpt.")
+    if "pt-query-digest なし" in slow_txt:
+        lines.append("- pt-query-digest が使えないため、`slow.txt` の抜粋を参照してください。")
     else:
-        lines.append("- See `slow.txt` for pt-query-digest output.")
+        lines.append("- pt-query-digest 出力は `slow.txt` を参照してください。")
     lines.append("")
     return "\n".join(lines)
 
@@ -302,7 +302,7 @@ def _has_log_content(path: Path) -> bool:
 def run_analyze(raw_dir: Path | None = None, *, allow_empty: bool = False) -> Path:
     source_dir = raw_dir or _latest_raw_dir()
     if source_dir is None:
-        raise ValueError("no raw log directory found; run pull first or pass --raw-dir")
+        raise ValueError("生ログディレクトリがありません。先に pull するか --raw-dir を指定してください")
 
     access_log = source_dir / "access.log"
     slow_log = source_dir / "mysql-slow.log"
@@ -311,7 +311,7 @@ def run_analyze(raw_dir: Path | None = None, *, allow_empty: bool = False) -> Pa
     has_slow = _has_log_content(slow_log)
     if not allow_empty and not has_access and not has_slow:
         raise ValueError(
-            "no access.log or slow log content found; run pull first or pass --allow-empty"
+            "access.log / slow log の中身がありません。先に pull するか allow_empty を使ってください"
         )
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -330,7 +330,7 @@ def run_analyze(raw_dir: Path | None = None, *, allow_empty: bool = False) -> Pa
     if has_slow:
         slow_txt = _analyze_slow(slow_log)
     else:
-        slow_txt = "# No slow query log found\n"
+        slow_txt = "# slow query ログなし\n"
     (analyze_dir / "slow.txt").write_text(slow_txt, encoding="utf-8")
 
     summary = _write_summary(

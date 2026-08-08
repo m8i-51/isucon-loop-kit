@@ -68,7 +68,7 @@ def test_run_pull_copies_existing_logs(tmp_path: Path, monkeypatch):
 
 def test_run_pull_requires_hosts(tmp_path: Path):
     cfg_path = _write_config(tmp_path, hosts=[])
-    with pytest.raises(ValueError, match="at least one host"):
+    with pytest.raises(ValueError, match="ホストが1つ以上"):
         run_pull(cfg_path)
 
 
@@ -93,12 +93,12 @@ def test_run_pull_raises_when_no_logs_found(tmp_path: Path, monkeypatch, capsys)
         patch("isuctl.pull.datetime") as dt,
     ):
         dt.now.return_value.strftime.return_value = "20260809-120000"
-        with pytest.raises(ValueError, match="no log files transferred"):
+        with pytest.raises(ValueError, match="ログを1つも取得できませんでした"):
             run_pull(cfg_path)
 
     rsync_mock.assert_not_called()
     captured = capsys.readouterr()
-    assert "warning: no log files found" in captured.err
+    assert "警告: リモートにログが見つかりません" in captured.err
 
 
 def test_cli_pull_command(tmp_path: Path, monkeypatch):
@@ -114,7 +114,7 @@ def test_cli_pull_command(tmp_path: Path, monkeypatch):
 
     assert result.exit_code == 0
     run_pull_mock.assert_called_once_with(cfg_path)
-    assert "pulled to" in result.stdout
+    assert "取得先" in result.stdout
 
 
 def test_run_pull_falls_back_to_sudo_copy_on_permission_denied(

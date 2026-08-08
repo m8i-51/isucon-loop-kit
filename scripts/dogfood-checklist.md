@@ -1,26 +1,26 @@
-# ISUCON14 dogfood checklist
+# ISUCON14 犬食いチェックリスト
 
-Manual end-to-end verification of `isuctl` against a real ISUCON14 AMI. Check off each step.
+実 ISUCON14 AMI に対する `isuctl` の手動 E2E 確認。各ステップをチェックする。
 
-## 1. Launch instance
+## 1. インスタンス起動
 
 - [ ] Region: `ap-northeast-1`
-- [ ] AMI: ISUCON14 official (`ami-0e334c50145a3ee41`) or [matsuu/aws-isucon](https://github.com/matsuu/aws-isucon) ISUCON14 image
-- [ ] Instance type: **non-burstable** (`c5.large` / `c6i.large` 以上). `t3.*` は CPU クレジット枯渇で初期実装でも CODE=32（マッチング失敗）になりやすい
-- [ ] Security group allows SSH (22) from your IP
-- [ ] Note public IP / DNS as `HOST`
+- [ ] AMI: ISUCON14 公式（`ami-0e334c50145a3ee41`）または [matsuu/aws-isucon](https://github.com/matsuu/aws-isucon) の ISUCON14 イメージ
+- [ ] インスタンスタイプ: **非バースト**（`c5.large` / `c6i.large` 以上）。`t3.*` は CPU クレジット枯渇で初期実装でも CODE=32（マッチング失敗）になりやすい
+- [ ] セキュリティグループで自分の IP から SSH (22) を許可
+- [ ] 公開 IP / DNS を `HOST` として控える
 
-## 2. Init config + SSH access
+## 2. 設定初期化 + SSH アクセス
 
 ```bash
 isuctl init-config --host HOST --key ~/.ssh/YOUR_KEY
-isuctl ensure-access   # copies ubuntu authorized_keys → isucon (AMI default)
+isuctl ensure-access   # ubuntu の authorized_keys → isucon へコピー（AMI 既定）
 ```
 
-- [ ] `isucon.toml` created with `app1` host
-- [ ] `ensure-access` makes `isucon@HOST` reachable
+- [ ] `isucon.toml` に `app1` ホストがある
+- [ ] `ensure-access` 後に `isucon@HOST` へ入れる
 
-## 3. Discover → sync-down → snapshot → bootstrap
+## 3. discover → sync-down → snapshot → bootstrap
 
 ```bash
 isuctl discover
@@ -29,15 +29,15 @@ isuctl snapshot
 isuctl bootstrap
 ```
 
-- [ ] `discover` updated roles / `remote_app_dir`
-- [ ] `sync-down` populated `./work` (or configured `local_dir`)
-- [ ] `snapshot` recorded on remote
-- [ ] `bootstrap` applied nginx LTSV + MySQL slow log snippets
+- [ ] `discover` が roles / `remote_app_dir` を更新した
+- [ ] `sync-down` が `./work`（または設定した `local_dir`）を埋めた
+- [ ] `snapshot` がリモートに記録された
+- [ ] `bootstrap` が nginx LTSV + MySQL slow を適用した
 
-## 4. Dummy edit → deploy
+## 4. ダミー編集 → deploy
 
-- [ ] Make a trivial change under `local_dir` (e.g. comment in app code)
-- [ ] `isuctl deploy` succeeds (requires sync-down ready marker)
+- [ ] `local_dir` 下を軽く変更（例: コメント追加）
+- [ ] `isuctl deploy` が成功（sync-down の ready マーカーが必要）
 
 ```bash
 isuctl deploy
@@ -45,10 +45,10 @@ isuctl deploy
 
 ## 5. Bench → pull → analyze → pack
 
-On the contest host (same box AMI):
+競技ホスト上（同一ボックス AMI）:
 
 ```bash
-# Optional: reduce matching latency for stock app dogfood
+# 任意: 初期実装のマッチング遅延を緩める
 # sed -i 's/ISUCON_MATCHING_INTERVAL=.*/ISUCON_MATCHING_INTERVAL=0.1/' ~/env.sh
 # sudo systemctl restart isuride-matcher
 
@@ -57,7 +57,7 @@ sudo truncate -s 0 /var/log/nginx/access.ltsv.log /var/log/mysql/mysql-slow.log
   --payment-url http://127.0.0.1:12345 --payment-bind-port 12345
 ```
 
-Then on your laptop:
+laptop 側:
 
 ```bash
 isuctl pull
@@ -66,33 +66,32 @@ isuctl pack
 isuctl bench-note SCORE --note "dogfood run"
 ```
 
-- [ ] Bench completes (note matching failures separately)
-- [ ] `out/raw/*` contains LTSV access + slow logs
-- [ ] `out/analyze/*` contains alp / slow output
-- [ ] `out/pack.md` written with section headings
+- [ ] ベンチが完走（マッチング失敗は別途メモ）
+- [ ] `out/raw/*` に LTSV アクセス + slow ログがある
+- [ ] `out/analyze/*` に alp / slow 出力がある
+- [ ] `out/pack.md` に見出しがある
 
-## 6. Teardown
+## 6. 後片付け
 
-- [ ] Stop or terminate the EC2 instance
-- [ ] Remove stale SSH host keys if you will reuse the same config with a new instance
+- [ ] EC2 を stop または terminate
+- [ ] 同じ設定で別インスタンスを使うなら古い SSH host key を消す
 
-## Optional
+## 任意
 
-- [ ] pprotein on laptop via SSH tunnel — see [assets/pprotein/README.md](../assets/pprotein/README.md)
-- [ ] `isuctl bench-note SCORE --note "dogfood run"` after a benchmark
+- [ ] laptop で pprotein + SSH トンネル — [assets/pprotein/README.md](../assets/pprotein/README.md)
+- [ ] ベンチ後に `isuctl bench-note SCORE --note "dogfood run"`
 
-## Known gotchas (ISUCON14 AMI)
+## 既知のハマりどころ（ISUCON14 AMI）
 
-- Prefer **non-burstable** instances (`c5.large+`). `t3.*` with 0 CPU credits → stock app fails with CODE=32.
-- Default matcher curls `https://isuride...` through nginx/TLS. Under load that request can stall and starve matching.
-  Fix for dogfood / early practice:
-  See also `assets/isucon14/matcher-http.service`.
+- **非バースト** インスタンス（`c5.large+`）を使う。`t3.*` でクレジット 0 → 初期実装でも CODE=32
+- 既定 matcher は `https://isuride...` を nginx/TLS 経由で叩く。負荷時に詰まってマッチングが飢餓する
+  犬食い / 初期練習向けの直し方:
+  `assets/isucon14/matcher-http.service` も参照。
   ```bash
-  # /etc/systemd/system/isuride-matcher.service ExecStart:
+  # /etc/systemd/system/isuride-matcher.service の ExecStart:
   # curl -s --max-time 1 http://127.0.0.1:8080/api/internal/matching
-  # and ISUCON_MATCHING_INTERVAL=0.05 in ~/env.sh
+  # ~/env.sh の ISUCON_MATCHING_INTERVAL=0.05
   sudo systemctl daemon-reload && sudo systemctl restart isuride-matcher
   ```
-- Bootstrap installs `alp` to `~/local/bin` (login PATH). `pt-query-digest` needs `apt-get update` first on stale AMIs.
-- MySQL `long_query_time=0` floods the DB; kit default is `0.2`.
-
+- bootstrap の `alp` は `~/local/bin`（login PATH）。古い AMI では `pt-query-digest` に先立つ `apt-get update` が必要
+- MySQL `long_query_time=0` は DB をログで溺れさせる。キット既定は `0.2`

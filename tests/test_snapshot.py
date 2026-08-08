@@ -101,7 +101,7 @@ def test_run_snapshot_picks_first_app_host(tmp_path: Path):
 
 def test_run_snapshot_requires_hosts(tmp_path: Path):
     cfg_path = _write_config(tmp_path, hosts=[])
-    with pytest.raises(ValueError, match="at least one host"):
+    with pytest.raises(ValueError, match="ホストが1つ以上"):
         run_snapshot(cfg_path)
 
 

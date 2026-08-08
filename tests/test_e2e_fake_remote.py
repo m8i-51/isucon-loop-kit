@@ -20,12 +20,12 @@ FAKE_REMOTE_SRC = FIXTURES / "fake_remote_tree"
 REMOTE_PREFIX = "/home/isucon/"
 
 PACK_HEADINGS = [
-    "# ISUCON Analysis Pack",
-    "## Top Endpoints",
-    "## Top SQLs",
-    "## Candidate Code Locations",
-    "## Schema Excerpt",
-    "## Next Hypotheses",
+    "# ISUCON 分析パック",
+    "## 遅いエンドポイント",
+    "## 遅い SQL",
+    "## 候補コード位置",
+    "## スキーマ抜粋",
+    "## 次の仮説",
 ]
 
 

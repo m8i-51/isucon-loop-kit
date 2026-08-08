@@ -151,7 +151,7 @@ def test_deploy_requires_hosts(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg_path = _write_config(tmp_path, hosts=[])
     mark_ready(tmp_path / "work")
-    with pytest.raises(ValueError, match="at least one host"):
+    with pytest.raises(ValueError, match="ホストが1つ以上"):
         run_deploy(cfg_path)
 
 

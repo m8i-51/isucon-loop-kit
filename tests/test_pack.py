@@ -18,12 +18,12 @@ from isuctl.pack import (
 )
 
 REQUIRED_HEADINGS = [
-    "# ISUCON Analysis Pack",
-    "## Top Endpoints",
-    "## Top SQLs",
-    "## Candidate Code Locations",
-    "## Schema Excerpt",
-    "## Next Hypotheses",
+    "# ISUCON 分析パック",
+    "## 遅いエンドポイント",
+    "## 遅い SQL",
+    "## 候補コード位置",
+    "## スキーマ抜粋",
+    "## 次の仮説",
 ]
 
 
@@ -84,7 +84,7 @@ def test_run_pack_writes_required_headings(tmp_path: Path, monkeypatch):
         "SELECT * FROM users WHERE id = 1;\nSELECT * FROM items WHERE user_id = 1;",
         encoding="utf-8",
     )
-    (analyze_dir / "summary.md").write_text("# Analysis Summary\n", encoding="utf-8")
+    (analyze_dir / "summary.md").write_text("# 解析サマリ\n", encoding="utf-8")
 
     cfg_path = _write_config(tmp_path, work)
     pack_path = run_pack(cfg_path, analyze_dir)
@@ -111,7 +111,7 @@ def test_run_pack_uses_latest_analyze_dir(tmp_path: Path, monkeypatch):
         d.mkdir(parents=True)
         (d / "alp.json").write_text("[]", encoding="utf-8")
         (d / "slow.txt").write_text("", encoding="utf-8")
-        (d / "summary.md").write_text("# Analysis Summary\n", encoding="utf-8")
+        (d / "summary.md").write_text("# 解析サマリ\n", encoding="utf-8")
 
     alp_data = [{"uri": "/only-new", "count": 1, "sum_time": 9.9, "avg_time": 9.9}]
     (newer / "alp.json").write_text(json.dumps(alp_data), encoding="utf-8")
@@ -127,7 +127,7 @@ def test_run_pack_requires_analyze_dir(tmp_path: Path, monkeypatch):
     work = tmp_path / "work"
     work.mkdir()
     cfg_path = _write_config(tmp_path, work)
-    with pytest.raises(ValueError, match="no analyze directory"):
+    with pytest.raises(ValueError, match="analyze ディレクトリがありません"):
         run_pack(cfg_path, None)
 
 
@@ -137,7 +137,7 @@ def test_run_pack_rejects_missing_analyze_dir(tmp_path: Path, monkeypatch):
     work.mkdir()
     cfg_path = _write_config(tmp_path, work)
     missing = tmp_path / "out" / "analyze" / "missing"
-    with pytest.raises(ValueError, match="does not exist"):
+    with pytest.raises(ValueError, match="analyze ディレクトリがありません"):
         run_pack(cfg_path, missing)
 
 
@@ -149,7 +149,7 @@ def test_run_pack_rejects_non_directory_analyze_dir(tmp_path: Path, monkeypatch)
     not_dir = tmp_path / "out" / "analyze.txt"
     not_dir.parent.mkdir(parents=True)
     not_dir.write_text("not a dir", encoding="utf-8")
-    with pytest.raises(ValueError, match="not a directory"):
+    with pytest.raises(ValueError, match="ディレクトリではありません"):
         run_pack(cfg_path, not_dir)
 
 
@@ -168,7 +168,7 @@ def test_run_pack_resolves_relative_local_dir_from_cwd(tmp_path: Path, monkeypat
     analyze_dir.mkdir(parents=True)
     (analyze_dir / "alp.json").write_text("[]", encoding="utf-8")
     (analyze_dir / "slow.txt").write_text("", encoding="utf-8")
-    (analyze_dir / "summary.md").write_text("# Analysis Summary\n", encoding="utf-8")
+    (analyze_dir / "summary.md").write_text("# 解析サマリ\n", encoding="utf-8")
 
     cfg_path = _write_config(tmp_path, Path("./work"))
     pack_path = run_pack(cfg_path, analyze_dir)
@@ -190,7 +190,7 @@ def test_cli_pack_command(tmp_path: Path, monkeypatch):
 
     assert result.exit_code == 0
     run_pack_mock.assert_called_once_with(cfg_path, analyze_dir)
-    assert "packed to" in result.stdout
+    assert "パック出力" in result.stdout
 
 
 def test_find_schema_file_accepts_numbered_schema(tmp_path: Path):

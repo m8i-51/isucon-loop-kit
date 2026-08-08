@@ -43,12 +43,12 @@ def run_deploy(
 ) -> None:
     config = load_config(config_path)
     if not config.hosts:
-        raise ValueError("config must have at least one host")
+        raise ValueError("config にホストが1つ以上必要です")
 
     local_dir = (Path.cwd() / config.project.local_dir).resolve()
     if not is_ready(local_dir) and not force:
         raise DeployBlockedError(
-            f"local dir is not ready: run sync-down first or use --force ({local_dir})"
+            f"local dir が未準備です: 先に sync-down するか --force を使ってください ({local_dir})"
         )
 
     host = _primary_host(config.hosts)

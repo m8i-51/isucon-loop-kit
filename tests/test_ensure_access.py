@@ -44,7 +44,7 @@ def test_ensure_access_copies_authorized_keys(tmp_path: Path, capsys):
     assert ssh_calls[0][0] == "ubuntu"
     assert "authorized_keys" in ssh_calls[0][1]
     assert ssh_calls[1][0] == "isucon"
-    assert "reachable" in capsys.readouterr().out
+    assert "接続できます" in capsys.readouterr().out
 
 
 def test_ensure_access_noop_when_bootstrap_user_same(tmp_path: Path, capsys):
@@ -52,7 +52,7 @@ def test_ensure_access_noop_when_bootstrap_user_same(tmp_path: Path, capsys):
     with patch("isuctl.ensure_access.run_ssh") as ssh_mock:
         run_ensure_access(cfg_path)
     ssh_mock.assert_not_called()
-    assert "nothing to do" in capsys.readouterr().out
+    assert "何もしません" in capsys.readouterr().out
 
 
 def test_ensure_access_raises_if_contest_user_still_unreachable(tmp_path: Path):
@@ -67,5 +67,5 @@ def test_ensure_access_raises_if_contest_user_still_unreachable(tmp_path: Path):
         return R()
 
     with patch("isuctl.ensure_access.run_ssh", side_effect=fake_ssh):
-        with pytest.raises(RuntimeError, match="still fails SSH"):
+        with pytest.raises(RuntimeError, match="SSH が失敗"):
             run_ensure_access(cfg_path)

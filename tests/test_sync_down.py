@@ -125,7 +125,7 @@ def test_run_sync_down_falls_back_to_first_host(tmp_path: Path, monkeypatch):
 def test_run_sync_down_requires_hosts(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg_path = _write_config(tmp_path, hosts=[])
-    with pytest.raises(ValueError, match="at least one host"):
+    with pytest.raises(ValueError, match="ホストが1つ以上"):
         run_sync_down(cfg_path)
 
 

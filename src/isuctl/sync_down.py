@@ -59,7 +59,7 @@ def _ensure_git_repo(local_dir: Path) -> None:
             "user.name=isucon",
             "commit",
             "-m",
-            "Initial sync from remote",
+            "リモートからの初回同期",
         ],
         cwd=local_dir,
         check=True,
@@ -85,7 +85,7 @@ def _sync_optional_paths(ssh, host: Host, local_dir: Path) -> None:
 def run_sync_down(config_path: Path) -> Path:
     config = load_config(config_path)
     if not config.hosts:
-        raise ValueError("config must have at least one host")
+        raise ValueError("config にホストが1つ以上必要です")
 
     host = _primary_host(config.hosts)
     local_dir = (Path.cwd() / config.project.local_dir).resolve()

@@ -1,51 +1,51 @@
-# pprotein setup (no VPC co-location)
+# pprotein セットアップ（競技 VPC に同居させない）
 
-[pprotein](https://github.com/kaz/pprotein) is the recommended viewer for alp / slow-query output during the ISUCON loop. This kit does **not** ship a custom dashboard — run pprotein on your **laptop** or another machine **outside** the contest VPC.
+[pprotein](https://github.com/kaz/pprotein) は、ISUCON ループ中の alp / slow-query 閲覧に推奨するビューアです。このキットは専用ダッシュボードを同梱しません。**laptop** か、競技 VPC の外のマシンで動かしてください。
 
-## Where to run
+## どこで動かすか
 
-| OK | Not OK |
+| OK | NG |
 |---|---|
-| Your laptop | Monitoring EC2 in the **same VPC** as contest servers |
-| Home lab / separate AWS account / different VPC | Any host that shares network placement with the benchmark targets |
+| 自分の laptop | 競技サーバと**同じ VPC** にある監視用 EC2 |
+| 自宅ラボ / 別 AWS アカウント / 別 VPC | ベンチ対象とネットワーク配置を共有するホスト |
 
-> **Warning:** Do **not** place a monitoring EC2 instance in the contest VPC. Extra load and shared failure domains can skew benchmarks and violate the spirit of solo practice. Keep observability off the contest network; use SSH port forwarding from your laptop instead.
+> **注意:** 競技 VPC 内に監視用 EC2 を置かないでください。負荷や障害ドメインの共有でベンチが歪みます。観測は競技ネットの外に置き、laptop から SSH ポートフォワードで繋ぎます。
 
-## Prerequisites on servers
+## サーバ側の前提
 
-Before pprotein can read logs meaningfully, remote hosts need the right log formats. Run from this repo:
+pprotein が意味のあるログを読む前に、リモート側のログ形式を整えます。このリポジトリから:
 
 ```bash
 isuctl bootstrap
 ```
 
-This deploys nginx LTSV access logging, MySQL slow-query settings, and (best-effort) alp on the remote host. See `src/isuctl/bootstrap.py` for details.
+nginx の LTSV アクセスログ、MySQL slow query 設定、（ベストエフォートで）alp を配備します。詳細は `src/isuctl/bootstrap.py` を参照。
 
-## Install pprotein (laptop)
+## pprotein の導入（laptop）
 
-Follow upstream instructions: [kaz/pprotein](https://github.com/kaz/pprotein).
+上流の手順に従ってください: [kaz/pprotein](https://github.com/kaz/pprotein)
 
-Typical flow:
+典型フロー:
 
-1. Clone or install the pprotein binary on your laptop.
-2. Ensure `isuctl pull` / `isuctl analyze` have produced artifacts under `out/` (or point pprotein at the remote log paths per upstream docs).
+1. laptop に pprotein を clone / インストールする
+2. `isuctl pull` / `isuctl analyze` で `out/` に成果物がある状態にする（または上流ドキュメントどおりリモートログを指す）
 
-## SSH local forward example
+## SSH ローカルフォワード例
 
-When pprotein expects a service on the remote host (e.g. port 19000), forward it to your laptop:
+リモートのサービス（例: 19000）を laptop に転送する:
 
 ```bash
 ssh -L 19000:127.0.0.1:19000 isucon@HOST
 ```
 
-Replace `HOST` with the app server IP or DNS from `isucon.toml`. Open `http://127.0.0.1:19000` locally while the tunnel is up.
+`HOST` は `isucon.toml` のアプリサーバ IP / DNS に置き換える。トンネル中は `http://127.0.0.1:19000` を開く。
 
-For multiple hosts, open one tunnel per host or use separate local ports (`19001`, …).
+複数ホストならトンネルを分けるか、ローカルポートを分ける（`19001` など）。
 
-## Related commands
+## 関連コマンド
 
 ```text
-isuctl pull      # fetch raw logs from remote
-isuctl analyze   # run alp / slow-query digest into out/analyze/
-isuctl pack      # bundle findings for Cursor
+isuctl pull      # リモートから生ログ取得
+isuctl analyze   # alp / slow 解析 → out/analyze/
+isuctl pack      # Cursor 用に発見事項を束ねる
 ```

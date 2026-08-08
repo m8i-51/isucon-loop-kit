@@ -58,7 +58,7 @@ def _pull_one(ssh, host: Host, remote_path: str, local_file: Path) -> None:
 def run_pull(config_path: Path) -> Path:
     config = load_config(config_path)
     if not config.hosts:
-        raise ValueError("config must have at least one host")
+        raise ValueError("config にホストが1つ以上必要です")
 
     host = primary_host(config.hosts)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -85,11 +85,11 @@ def run_pull(config_path: Path) -> Path:
 
     if transferred == 0:
         print(
-            "warning: no log files found on remote host; pull transferred 0 files",
+            "警告: リモートにログが見つかりません。取得ファイル数は 0 です",
             file=sys.stderr,
         )
         raise ValueError(
-            "no log files transferred; check remote log paths and permissions"
+            "ログを1つも取得できませんでした。リモートのパスと権限を確認してください"
         )
 
     return raw_dir
