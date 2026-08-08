@@ -21,6 +21,9 @@ def run_rollback(
             f"local dir is not ready: run sync-down first or use --force ({local_dir})"
         )
 
+    if not config.hosts:
+        raise ValueError("config must have at least one host")
+
     subprocess.run(
         ["git", "-C", str(local_dir), "reset", "--hard", git_ref],
         check=True,

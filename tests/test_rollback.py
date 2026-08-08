@@ -62,6 +62,26 @@ def test_rollback_resets_and_deploys(tmp_path: Path, monkeypatch):
     assert deploy_calls == [(cfg_path, True, "isucon-python.service")]
 
 
+def test_rollback_requires_hosts(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(tmp_path, hosts=[])
+    mark_ready(tmp_path / "work")
+    git_calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        git_calls.append(cmd)
+        return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    with (
+        patch("isuctl.rollback.subprocess.run", side_effect=fake_run),
+        patch("isuctl.rollback.run_deploy"),
+    ):
+        with pytest.raises(ValueError, match="at least one host"):
+            run_rollback(cfg_path)
+
+    assert git_calls == []
+
+
 def test_rollback_force_bypasses_ready_guard(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg_path = _write_config(
