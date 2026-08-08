@@ -12,6 +12,7 @@ from isuctl.config import (
     save_config,
 )
 from isuctl.discover import run_discover
+from isuctl.sync_down import run_sync_down
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -62,6 +63,16 @@ def discover(
         roles = ", ".join(h.role) or "(none)"
         typer.echo(f"{h.name} ({h.host}): roles=[{roles}] remote_app_dir={h.remote_app_dir}")
     typer.echo(f"updated {config}")
+
+
+@app.command("sync-down")
+def sync_down(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+) -> None:
+    local_dir = run_sync_down(config)
+    typer.echo(f"synced to {local_dir}")
 
 
 # placeholder so imports stay stable; real commands added in later tasks
