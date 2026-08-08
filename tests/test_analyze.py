@@ -1,0 +1,98 @@
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from typer.testing import CliRunner
+
+from isuctl.analyze import aggregate_ltsv_by_uri, run_analyze
+from isuctl.cli import app
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_aggregate_ltsv_by_uri_ranks_by_sum_time():
+    lines = (FIXTURES / "sample_access.ltsv").read_text(encoding="utf-8").splitlines()
+    results = aggregate_ltsv_by_uri(lines)
+    assert len(results) == 2
+    assert results[0]["uri"] == "/api/foo"
+    assert results[0]["sum_time"] == pytest.approx(1.2)
+    assert results[0]["count"] == 2
+    assert results[1]["uri"] == "/api/bar"
+    assert results[1]["sum_time"] == pytest.approx(0.4)
+
+
+def test_run_analyze_python_fallback(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "access.log").write_text(
+        (FIXTURES / "sample_access.ltsv").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (raw_dir / "mysql-slow.log").write_text(
+        (FIXTURES / "sample_slow.log").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    with (
+        patch("isuctl.analyze.shutil.which", return_value=None),
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    assert out_dir == tmp_path / "out" / "analyze" / "20260809-130000"
+    alp = json.loads((out_dir / "alp.json").read_text(encoding="utf-8"))
+    assert alp[0]["uri"] == "/api/foo"
+    assert alp[0]["sum_time"] == pytest.approx(1.2)
+
+    slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
+    assert "pt-query-digest not available" in slow_txt
+    assert "SELECT * FROM users" in slow_txt
+
+    summary = (out_dir / "summary.md").read_text(encoding="utf-8")
+    assert "/api/foo" in summary
+    assert "1.200" in summary or "1.2" in summary
+
+
+def test_run_analyze_uses_latest_raw_dir(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    older = tmp_path / "out" / "raw" / "20260809-100000"
+    newer = tmp_path / "out" / "raw" / "20260809-120000"
+    for d in (older, newer):
+        d.mkdir(parents=True)
+        (d / "access.log").write_text(
+            (FIXTURES / "sample_access.ltsv").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+
+    with (
+        patch("isuctl.analyze.shutil.which", return_value=None),
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(None)
+
+    alp = json.loads((out_dir / "alp.json").read_text(encoding="utf-8"))
+    assert alp[0]["uri"] == "/api/foo"
+
+
+def test_run_analyze_requires_raw_dir(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="no raw log directory"):
+        run_analyze(None)
+
+
+def test_cli_analyze_command(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+
+    with patch("isuctl.cli.run_analyze") as run_analyze_mock:
+        run_analyze_mock.return_value = tmp_path / "out" / "analyze" / "20260809-130000"
+        result = CliRunner().invoke(app, ["analyze", "--raw-dir", str(raw_dir)])
+
+    assert result.exit_code == 0
+    run_analyze_mock.assert_called_once_with(raw_dir)
+    assert "analyzed to" in result.stdout

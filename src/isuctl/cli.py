@@ -3,6 +3,8 @@ from pathlib import Path
 import typer
 
 from isuctl import __version__
+from isuctl.analyze import run_analyze
+from isuctl.bench_note import run_bench_note
 from isuctl.bootstrap import run_bootstrap
 from isuctl.config import (
     Host,
@@ -14,6 +16,7 @@ from isuctl.config import (
 )
 from isuctl.deploy import DeployBlockedError, run_deploy
 from isuctl.discover import run_discover
+from isuctl.pull import run_pull
 from isuctl.rollback import run_rollback
 from isuctl.snapshot import run_snapshot
 from isuctl.sync_down import run_sync_down
@@ -131,7 +134,30 @@ def snapshot(
     typer.echo(f"snapshot: {remote_path}")
 
 
-# placeholder so imports stay stable; real commands added in later tasks
-@app.command("ping")
-def ping() -> None:
-    typer.echo("pong")
+@app.command("pull")
+def pull(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+) -> None:
+    raw_dir = run_pull(config)
+    typer.echo(f"pulled to {raw_dir}")
+
+
+@app.command("analyze")
+def analyze(
+    raw_dir: Path | None = typer.Option(
+        None, "--raw-dir", help="Raw log directory (default: latest out/raw/*)"
+    ),
+) -> None:
+    out = run_analyze(raw_dir)
+    typer.echo(f"analyzed to {out}")
+
+
+@app.command("bench-note")
+def bench_note(
+    score: int = typer.Argument(..., help="Benchmark score"),
+    note: str = typer.Option("", "--note", "-n", help="Optional note"),
+) -> None:
+    path = run_bench_note(score, note=note)
+    typer.echo(f"recorded to {path}")

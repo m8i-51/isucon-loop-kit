@@ -1,0 +1,4 @@
+time:2026-08-09T00:00:01	remote_addr:127.0.0.1	request_method:GET	uri:/api/foo	status:200	request_time:0.5
+time:2026-08-09T00:00:02	remote_addr:127.0.0.1	request_method:GET	uri:/api/bar	status:200	request_time:0.3
+time:2026-08-09T00:00:03	remote_addr:127.0.0.1	request_method:GET	uri:/api/foo	status:200	request_time:0.7
+time:2026-08-09T00:00:04	remote_addr:127.0.0.1	request_method:GET	uri:/api/bar	status:200	request_time:0.1

@@ -1,0 +1,13 @@
+/usr/sbin/mysqld, Version: 8.0.35-0ubuntu0.22.04.1 ((Ubuntu)). started with:
+Tcp port: 3306  Unix socket: /var/run/mysqld/mysqld.sock
+Time                 Id Command    Argument
+# Time: 2026-08-09T00:00:01.123456Z
+# User@Host: isucon[isucon] @ localhost []  Id:    10
+# Query_time: 0.050000  Lock_time: 0.000000 Rows_sent: 1  Rows_examined: 1000
+SET timestamp=1723161601;
+SELECT * FROM users WHERE id = 1;
+# Time: 2026-08-09T00:00:02.234567Z
+# User@Host: isucon[isucon] @ localhost []  Id:    11
+# Query_time: 0.120000  Lock_time: 0.000000 Rows_sent: 10  Rows_examined: 5000
+SET timestamp=1723161602;
+SELECT * FROM items WHERE user_id = 1 ORDER BY created_at DESC LIMIT 10;

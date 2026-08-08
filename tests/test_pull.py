@@ -1,0 +1,87 @@
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from typer.testing import CliRunner
+
+from isuctl.cli import app
+from isuctl.config import Host, IsuconConfig, ProjectConfig, SshConfig, save_config
+from isuctl.pull import run_pull
+
+
+def _write_config(tmp_path: Path, *, hosts: list[Host]) -> Path:
+    cfg_path = tmp_path / "isucon.toml"
+    save_config(
+        cfg_path,
+        IsuconConfig(
+            project=ProjectConfig(name="t", local_dir="./work"),
+            ssh=SshConfig(user="isucon", key="/tmp/k"),
+            hosts=hosts,
+        ),
+    )
+    return cfg_path
+
+
+def test_run_pull_copies_existing_logs(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app", "web", "db"])],
+    )
+    exists_checks: list[str] = []
+    rsync_calls: list[tuple[str, Path]] = []
+
+    def fake_ssh(ssh, host, cmd, check=True):
+        exists_checks.append(cmd)
+
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        if "test -e" in cmd and "/tmp/mysql-slow.log" in cmd:
+            R.returncode = 1
+        return R()
+
+    def fake_rsync(ssh, host, remote_file, local_file):
+        rsync_calls.append((remote_file, local_file))
+        local_file.parent.mkdir(parents=True, exist_ok=True)
+        local_file.write_text(f"content from {remote_file}", encoding="utf-8")
+
+    with (
+        patch("isuctl.pull.run_ssh", side_effect=fake_ssh),
+        patch("isuctl.pull.rsync_file_from_remote", side_effect=fake_rsync),
+        patch("isuctl.pull.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-120000"
+        raw_dir = run_pull(cfg_path)
+
+    assert raw_dir == tmp_path / "out" / "raw" / "20260809-120000"
+    assert (raw_dir / "access.log").exists()
+    assert (raw_dir / "mysql-slow.log").exists()
+    remote_paths = [r for r, _ in rsync_calls]
+    assert "/var/log/nginx/access.log" in remote_paths
+    assert "/var/log/mysql/mysql-slow.log" in remote_paths
+    assert "/tmp/mysql-slow.log" not in remote_paths
+
+
+def test_run_pull_requires_hosts(tmp_path: Path):
+    cfg_path = _write_config(tmp_path, hosts=[])
+    with pytest.raises(ValueError, match="at least one host"):
+        run_pull(cfg_path)
+
+
+def test_cli_pull_command(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+
+    with patch("isuctl.cli.run_pull") as run_pull_mock:
+        run_pull_mock.return_value = tmp_path / "out" / "raw" / "20260809-120000"
+        result = CliRunner().invoke(app, ["pull", "--config", str(cfg_path)])
+
+    assert result.exit_code == 0
+    run_pull_mock.assert_called_once_with(cfg_path)
+    assert "pulled to" in result.stdout
