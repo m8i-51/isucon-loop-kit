@@ -1,5 +1,7 @@
 [mysqld]
 slow_query_log = 1
 slow_query_log_file = /var/log/mysql/mysql-slow.log
-long_query_time = 0
-log_queries_not_using_indexes = 1
+# 0 is too aggressive for practice benches (MySQL can drown in logging).
+# Use 0 temporarily when hunting every query; default to 0.2 for dogfood/practice.
+long_query_time = 0.2
+log_queries_not_using_indexes = 0

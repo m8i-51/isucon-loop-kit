@@ -95,6 +95,21 @@ def _install_alp(ssh, host: Host) -> None:
     run_ssh(ssh, host, cmd, check=False)
 
 
+def _install_pt_query_digest(ssh, host: Host) -> None:
+    # Prefer apt when available; fall back to a clear message.
+    cmd = (
+        "if command -v pt-query-digest >/dev/null 2>&1; then exit 0; fi; "
+        "if command -v apt-get >/dev/null 2>&1; then "
+        "sudo apt-get update -qq >/tmp/isuctl-apt-update.log 2>&1 || true; "
+        "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y percona-toolkit >/tmp/isuctl-pt-install.log 2>&1 || "
+        "echo 'bootstrap: apt install percona-toolkit failed (see /tmp/isuctl-pt-install.log)'; "
+        "else "
+        "echo 'bootstrap: pt-query-digest missing and apt-get unavailable'; "
+        "fi"
+    )
+    run_ssh(ssh, host, cmd, check=False)
+
+
 def run_bootstrap(config_path: Path) -> None:
     config = load_config(config_path)
     if not config.hosts:
@@ -107,3 +122,4 @@ def run_bootstrap(config_path: Path) -> None:
     _deploy_system_configs(config.ssh, host)
     _fix_log_permissions(config.ssh, host)
     _install_alp(config.ssh, host)
+    _install_pt_query_digest(config.ssh, host)

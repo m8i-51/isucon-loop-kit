@@ -35,8 +35,7 @@ def test_template_files_exist_and_match_brief():
     assert "access_log /var/log/nginx/access.ltsv.log ltsv" in nginx
     assert "slow_query_log = 1" in mysql
     assert "slow_query_log_file = /var/log/mysql/mysql-slow.log" in mysql
-    assert "long_query_time = 0" in mysql
-    assert "log_queries_not_using_indexes = 1" in mysql
+    assert "long_query_time = 0.2" in mysql
 
 
 def test_run_bootstrap_uploads_snippets_and_runs_ssh(tmp_path: Path):
@@ -86,6 +85,7 @@ def test_run_bootstrap_uploads_snippets_and_runs_ssh(tmp_path: Path):
     assert any("chmod 644" in cmd for cmd, _ in ssh_calls)
     assert any("restart mysql" in cmd or "restart mysqld" in cmd for cmd, _ in ssh_calls)
     assert any("alp" in cmd for cmd, _ in ssh_calls)
+    assert any("pt-query-digest" in cmd or "percona-toolkit" in cmd for cmd, _ in ssh_calls)
 
 
 def test_run_bootstrap_picks_first_app_host(tmp_path: Path):

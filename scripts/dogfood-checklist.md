@@ -6,6 +6,7 @@ Manual end-to-end verification of `isuctl` against a real ISUCON14 AMI. Check of
 
 - [ ] Region: `ap-northeast-1`
 - [ ] AMI: ISUCON14 official (`ami-0e334c50145a3ee41`) or [matsuu/aws-isucon](https://github.com/matsuu/aws-isucon) ISUCON14 image
+- [ ] Instance type: **non-burstable** (`c5.large` / `c6i.large` 以上). `t3.*` は CPU クレジット枯渇で初期実装でも CODE=32（マッチング失敗）になりやすい
 - [ ] Security group allows SSH (22) from your IP
 - [ ] Note public IP / DNS as `HOST`
 
@@ -42,17 +43,31 @@ isuctl bootstrap
 isuctl deploy
 ```
 
-## 5. pull → analyze → pack
+## 5. Bench → pull → analyze → pack
 
-Generate traffic (manual curl or benchmark), then:
+On the contest host (same box AMI):
+
+```bash
+# Optional: reduce matching latency for stock app dogfood
+# sed -i 's/ISUCON_MATCHING_INTERVAL=.*/ISUCON_MATCHING_INTERVAL=0.1/' ~/env.sh
+# sudo systemctl restart isuride-matcher
+
+sudo truncate -s 0 /var/log/nginx/access.ltsv.log /var/log/mysql/mysql-slow.log
+./bench run --addr 127.0.0.1:443 --target https://isuride.xiv.isucon.net \
+  --payment-url http://127.0.0.1:12345 --payment-bind-port 12345
+```
+
+Then on your laptop:
 
 ```bash
 isuctl pull
 isuctl analyze
 isuctl pack
+isuctl bench-note SCORE --note "dogfood run"
 ```
 
-- [ ] `out/raw/*` contains logs
+- [ ] Bench completes (note matching failures separately)
+- [ ] `out/raw/*` contains LTSV access + slow logs
 - [ ] `out/analyze/*` contains alp / slow output
 - [ ] `out/pack.md` written with section headings
 
@@ -65,3 +80,19 @@ isuctl pack
 
 - [ ] pprotein on laptop via SSH tunnel — see [assets/pprotein/README.md](../assets/pprotein/README.md)
 - [ ] `isuctl bench-note SCORE --note "dogfood run"` after a benchmark
+
+## Known gotchas (ISUCON14 AMI)
+
+- Prefer **non-burstable** instances (`c5.large+`). `t3.*` with 0 CPU credits → stock app fails with CODE=32.
+- Default matcher curls `https://isuride...` through nginx/TLS. Under load that request can stall and starve matching.
+  Fix for dogfood / early practice:
+  See also `assets/isucon14/matcher-http.service`.
+  ```bash
+  # /etc/systemd/system/isuride-matcher.service ExecStart:
+  # curl -s --max-time 1 http://127.0.0.1:8080/api/internal/matching
+  # and ISUCON_MATCHING_INTERVAL=0.05 in ~/env.sh
+  sudo systemctl daemon-reload && sudo systemctl restart isuride-matcher
+  ```
+- Bootstrap installs `alp` to `~/local/bin` (login PATH). `pt-query-digest` needs `apt-get update` first on stale AMIs.
+- MySQL `long_query_time=0` floods the DB; kit default is `0.2`.
+

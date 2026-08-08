@@ -5,7 +5,12 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from isuctl.analyze import _normalize_alp_data, aggregate_ltsv_by_uri, run_analyze
+from isuctl.analyze import (
+    _fallback_slow_summary,
+    _normalize_alp_data,
+    aggregate_ltsv_by_uri,
+    run_analyze,
+)
 from isuctl.cli import app
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -20,6 +25,44 @@ def test_aggregate_ltsv_by_uri_ranks_by_sum_time():
     assert results[0]["count"] == 2
     assert results[1]["uri"] == "/api/bar"
     assert results[1]["sum_time"] == pytest.approx(0.4)
+
+
+def test_aggregate_ltsv_strips_query_string():
+    lines = [
+        "uri:/api/app/nearby-chairs?latitude=1&longitude=2\trequest_time:1.0",
+        "uri:/api/app/nearby-chairs?latitude=9&longitude=8\trequest_time:2.0",
+    ]
+    results = aggregate_ltsv_by_uri(lines)
+    assert len(results) == 1
+    assert results[0]["uri"] == "/api/app/nearby-chairs"
+    assert results[0]["count"] == 2
+    assert results[0]["sum_time"] == pytest.approx(3.0)
+
+
+def test_fallback_slow_summary_ranks_by_query_time(tmp_path: Path):
+    slow = tmp_path / "mysql-slow.log"
+    slow.write_text(
+        "\n".join(
+            [
+                "# Query_time: 0.10  Lock_time: 0.00 Rows_sent: 1  Rows_examined: 1",
+                "SELECT * FROM rides WHERE id = 1;",
+                "# Query_time: 1.50  Lock_time: 0.00 Rows_sent: 0  Rows_examined: 0",
+                "INSERT INTO `chair_locations` VALUES ('a',1),('b',2),('c',3),('d',4);",
+                "# Query_time: 0.80  Lock_time: 0.00 Rows_sent: 1  Rows_examined: 10",
+                "SELECT id,",
+                "       name",
+                "FROM chairs",
+                "WHERE is_active = TRUE;",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary = _fallback_slow_summary(slow)
+    assert "FROM chairs WHERE is_active = TRUE" in summary
+    assert "SELECT * FROM rides WHERE id = 1" in summary
+    assert "chair_locations" not in summary
+    assert summary.index("0.8000") < summary.index("0.1000")
 
 
 def test_run_analyze_python_fallback(tmp_path: Path, monkeypatch):

@@ -1,0 +1,24 @@
+# Drop-in style unit for ISUCON14 dogfood / early practice.
+# Bypass nginx+TLS so matching does not stall under load (CODE=32).
+#
+# Install:
+#   sudo cp assets/isucon14/matcher-http.service /etc/systemd/system/isuride-matcher.service
+#   # or merge ExecStart into the existing unit
+#   echo 'ISUCON_MATCHING_INTERVAL=0.05' >> /home/isucon/env.sh   # or edit in place
+#   sudo systemctl daemon-reload
+#   sudo systemctl restart isuride-matcher
+
+[Unit]
+Description=isuride-matcher (direct to app :8080)
+After=isuride-go.service
+
+[Service]
+User=isucon
+Group=isucon
+EnvironmentFile=/home/isucon/env.sh
+ExecStart=/bin/sh -c "while true; do curl -s --max-time 1 http://127.0.0.1:8080/api/internal/matching; sleep ${ISUCON_MATCHING_INTERVAL:-0.05}; done"
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

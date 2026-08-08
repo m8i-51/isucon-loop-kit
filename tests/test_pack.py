@@ -7,7 +7,15 @@ from typer.testing import CliRunner
 
 from isuctl.cli import app
 from isuctl.config import Host, IsuconConfig, ProjectConfig, SshConfig, save_config
-from isuctl.pack import _find_schema_file, normalize_alp_entry, run_pack
+from isuctl.pack import (
+    SQL_DISPLAY_MAX_CHARS,
+    _extract_sql_lines,
+    _find_candidate_files,
+    _find_schema_file,
+    _format_top_sqls,
+    normalize_alp_entry,
+    run_pack,
+)
 
 REQUIRED_HEADINGS = [
     "# ISUCON Analysis Pack",
@@ -193,3 +201,39 @@ def test_find_schema_file_accepts_numbered_schema(tmp_path: Path):
     (sql_dir / "2-master-data.sql").write_text("INSERT INTO users VALUES (1);\n", encoding="utf-8")
     found = _find_schema_file(tmp_path)
     assert found == schema
+
+
+def test_find_candidate_files_ignores_dot_git(tmp_path: Path):
+    (tmp_path / "app.go").write_text("func nearbyChairs() {}\n", encoding="utf-8")
+    git_obj = tmp_path / ".git" / "objects" / "ab"
+    git_obj.mkdir(parents=True)
+    (git_obj / "cdef").write_text("nearbyChairs binary garbage\n", encoding="utf-8")
+    node = tmp_path / "node_modules" / "pkg"
+    node.mkdir(parents=True)
+    (node / "index.js").write_text("nearbyChairs()\n", encoding="utf-8")
+
+    matches = _find_candidate_files(tmp_path, ["nearbyChairs"])
+    assert matches == ["app.go"]
+
+
+def test_extract_sql_lines_truncates_giant_inserts():
+    giant = "INSERT INTO `chair_locations` VALUES " + ("('x')," * 5000)
+    sqls = _extract_sql_lines(giant + "\nSELECT * FROM rides WHERE id = 1;\n")
+    assert sqls == ["SELECT * FROM rides WHERE id = 1"]
+    formatted = _format_top_sqls(sqls)
+    assert "SELECT * FROM rides WHERE id = 1" in formatted
+    assert len(formatted) < 2000
+
+
+def test_extract_sql_lines_fingerprints_literals():
+    text = "\n".join(
+        [
+            "SELECT * FROM chair_locations WHERE chair_id = 'aaa' ORDER BY created_at DESC LIMIT 1;",
+            "SELECT * FROM chair_locations WHERE chair_id = 'bbb' ORDER BY created_at DESC LIMIT 1;",
+            "SELECT * FROM rides WHERE id = 1;",
+        ]
+    )
+    sqls = _extract_sql_lines(text)
+    assert len(sqls) == 2
+    assert "chair_locations" in sqls[0]
+    assert "rides" in sqls[1]

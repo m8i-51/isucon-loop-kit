@@ -9,6 +9,8 @@ from isuctl.paths import out_dir
 
 TOP_N = 10
 SCHEMA_EXCERPT_LINES = 80
+SQL_DISPLAY_MAX_CHARS = 240
+SQL_EXTRACT_MAX_CHARS = 4000
 CODE_SEARCH_EXTENSIONS = {
     ".go",
     ".py",
@@ -29,6 +31,8 @@ TABLE_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 NUMERIC_SEGMENT_RE = re.compile(r"^\d+$")
+SQL_STRING_LITERAL_RE = re.compile(r"'[^']*'")
+SQL_NUMBER_LITERAL_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 
 
 def normalize_alp_entry(entry: dict) -> dict[str, float | int | str]:
@@ -66,17 +70,38 @@ def _normalize_alp_data(raw: list) -> list[dict[str, float | int | str]]:
     return normalized
 
 
+def _fingerprint_sql(sql: str) -> str:
+    fingerprinted = SQL_STRING_LITERAL_RE.sub("?", sql)
+    fingerprinted = SQL_NUMBER_LITERAL_RE.sub("?", fingerprinted)
+    return " ".join(fingerprinted.split())
+
+
 def _extract_sql_lines(slow_txt: str) -> list[str]:
     queries: list[str] = []
     seen: set[str] = set()
     for line in slow_txt.splitlines():
-        stripped = line.strip()
+        stripped = line.strip().rstrip(";")
         if not stripped or stripped.startswith("#"):
             continue
-        if SQL_LINE_RE.match(stripped) and stripped not in seen:
-            seen.add(stripped)
+        if not SQL_LINE_RE.match(stripped):
+            continue
+        # Skip bulk seed dumps; they drown out useful app queries in packs.
+        upper = stripped.upper()
+        if upper.startswith("INSERT") and "VALUES" in upper and stripped.count("(") > 3:
+            continue
+        if len(stripped) > SQL_EXTRACT_MAX_CHARS:
+            stripped = stripped[: SQL_EXTRACT_MAX_CHARS - 3] + "..."
+        fingerprint = _fingerprint_sql(stripped)
+        if fingerprint not in seen:
+            seen.add(fingerprint)
             queries.append(stripped)
     return queries
+
+
+def _truncate_sql_for_display(sql: str) -> str:
+    if len(sql) <= SQL_DISPLAY_MAX_CHARS:
+        return sql
+    return sql[: SQL_DISPLAY_MAX_CHARS - 3] + "..."
 
 
 def _extract_table_names(sql_lines: list[str]) -> list[str]:
@@ -104,6 +129,28 @@ def _uri_search_terms(uris: list[str]) -> list[str]:
     return terms
 
 
+def _is_ignored_candidate(path: Path, local_dir: Path) -> bool:
+    try:
+        parts = path.relative_to(local_dir).parts
+    except ValueError:
+        parts = path.parts
+    ignored = {".git", "node_modules", "vendor", ".venv", "venv", "__pycache__"}
+    if any(part in ignored for part in parts):
+        return True
+    if path.name in {".gitignore", ".gitattributes", ".DS_Store"}:
+        return True
+    # Skip extensionless binaries / build artifacts commonly checked into AMI trees.
+    if path.suffix == "" and path.is_file():
+        try:
+            with path.open("rb") as fh:
+                head = fh.read(4)
+            if head.startswith(b"\x7fELF") or head.startswith(b"#!"):
+                return True
+        except OSError:
+            return True
+    return False
+
+
 def _find_candidate_files(local_dir: Path, terms: list[str]) -> list[str]:
     if not local_dir.exists() or not terms:
         return []
@@ -112,6 +159,8 @@ def _find_candidate_files(local_dir: Path, terms: list[str]) -> list[str]:
     seen_paths: set[str] = set()
     for path in local_dir.rglob("*"):
         if not path.is_file():
+            continue
+        if _is_ignored_candidate(path, local_dir):
             continue
         if path.suffix and path.suffix not in CODE_SEARCH_EXTENSIONS:
             continue
@@ -213,7 +262,7 @@ def _format_top_sqls(sql_lines: list[str]) -> str:
         return "_No SQL statements extracted from slow log._\n"
     lines: list[str] = []
     for rank, sql in enumerate(sql_lines[:TOP_N], start=1):
-        lines.append(f"{rank}. `{sql}`")
+        lines.append(f"{rank}. `{_truncate_sql_for_display(sql)}`")
     if len(sql_lines) > TOP_N:
         lines.append("")
         lines.append(f"_Showing top {TOP_N} of {len(sql_lines)} queries._")

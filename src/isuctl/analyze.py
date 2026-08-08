@@ -1,27 +1,36 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from isuctl.pack import normalize_alp_entry
 from isuctl.paths import out_dir
 
 SLOW_FALLBACK_LINES = 200
+SLOW_DIGEST_MAX_CHARS = 80_000
+SLOW_FALLBACK_TOP_N = 30
+SLOW_SQL_DISPLAY_CHARS = 240
+QUERY_TIME_RE = re.compile(r"Query_time:\s*([0-9.]+)")
+SQL_START_RE = re.compile(
+    r"^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE)\b",
+    re.IGNORECASE,
+)
 
 
-def _parse_ltsv_line(line: str) -> dict[str, str]:
-    fields: dict[str, str] = {}
-    for part in line.strip().split("\t"):
-        if ":" not in part:
-            continue
-        key, value = part.split(":", 1)
-        fields[key] = value
-    return fields
+def normalize_uri(uri: str) -> str:
+    """Strip query string and fragment for aggregation."""
+    if not uri:
+        return uri
+    parts = urlsplit(uri)
+    path = parts.path or uri.split("?", 1)[0]
+    return path or uri
 
 
 def aggregate_ltsv_by_uri(lines: Iterable[str]) -> list[dict[str, float | int | str]]:
@@ -32,7 +41,7 @@ def aggregate_ltsv_by_uri(lines: Iterable[str]) -> list[dict[str, float | int | 
         if not line.strip():
             continue
         fields = _parse_ltsv_line(line)
-        uri = fields.get("uri", "")
+        uri = normalize_uri(fields.get("uri", ""))
         if not uri:
             continue
         try:
@@ -56,6 +65,16 @@ def aggregate_ltsv_by_uri(lines: Iterable[str]) -> list[dict[str, float | int | 
         )
     results.sort(key=lambda item: float(item["sum_time"]), reverse=True)
     return results
+
+
+def _parse_ltsv_line(line: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for part in line.strip().split("\t"):
+        if ":" not in part:
+            continue
+        key, value = part.split(":", 1)
+        fields[key] = value
+    return fields
 
 
 def _latest_raw_dir() -> Path | None:
@@ -85,12 +104,40 @@ def _run_alp(access_log: Path) -> list[dict[str, float | int | str]] | None:
     return None
 
 
+def _merge_by_normalized_uri(
+    alp_data: list[dict[str, float | int | str]],
+) -> list[dict[str, float | int | str]]:
+    totals: dict[str, dict[str, float | int]] = defaultdict(
+        lambda: {"count": 0, "sum_time": 0.0}
+    )
+    for entry in alp_data:
+        normalized = normalize_alp_entry(entry)
+        uri = normalize_uri(str(normalized["uri"]))
+        count = int(normalized["count"])
+        sum_time = float(normalized["sum_time"])
+        totals[uri]["count"] = int(totals[uri]["count"]) + count
+        totals[uri]["sum_time"] = float(totals[uri]["sum_time"]) + sum_time
+
+    results: list[dict[str, float | int | str]] = []
+    for uri, data in totals.items():
+        count = int(data["count"])
+        sum_time = float(data["sum_time"])
+        results.append(
+            {
+                "uri": uri,
+                "count": count,
+                "sum_time": sum_time,
+                "avg_time": sum_time / count if count else 0.0,
+            }
+        )
+    results.sort(key=lambda item: float(item["sum_time"]), reverse=True)
+    return results
+
+
 def _normalize_alp_data(
     alp_data: list[dict[str, float | int | str]],
 ) -> list[dict[str, float | int | str]]:
-    normalized = [normalize_alp_entry(entry) for entry in alp_data]
-    normalized.sort(key=lambda item: float(item["sum_time"]), reverse=True)
-    return normalized
+    return _merge_by_normalized_uri(alp_data)
 
 
 def _analyze_access(access_log: Path) -> list[dict[str, float | int | str]]:
@@ -111,16 +158,105 @@ def _run_pt_query_digest(slow_log: Path) -> str | None:
     return result.stdout
 
 
+def _truncate_slow_output(text: str) -> str:
+    if len(text) <= SLOW_DIGEST_MAX_CHARS:
+        return text
+    return (
+        text[:SLOW_DIGEST_MAX_CHARS]
+        + "\n\n# truncated by isuctl analyze "
+        f"(limit {SLOW_DIGEST_MAX_CHARS} chars)\n"
+    )
+
+
+def _is_bulk_insert(sql: str) -> bool:
+    upper = sql.upper()
+    return upper.startswith("INSERT") and "VALUES" in upper and sql.count("(") > 3
+
+
+def _fallback_slow_summary(slow_log: Path) -> str:
+    """Rank MySQL slow-log entries by Query_time when pt-query-digest is missing."""
+    entries: list[tuple[float, str]] = []
+    current_time: float | None = None
+    collecting = False
+    sql_parts: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_time, collecting, sql_parts
+        if current_time is None or not sql_parts:
+            current_time = None
+            collecting = False
+            sql_parts = []
+            return
+        sql = " ".join(part.strip() for part in sql_parts if part.strip())
+        sql = " ".join(sql.split())
+        if sql and not _is_bulk_insert(sql):
+            if len(sql) > SLOW_SQL_DISPLAY_CHARS:
+                sql = sql[: SLOW_SQL_DISPLAY_CHARS - 3] + "..."
+            entries.append((current_time, sql))
+        current_time = None
+        collecting = False
+        sql_parts = []
+
+    for raw in slow_log.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.rstrip()
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            if collecting:
+                flush()
+            match = QUERY_TIME_RE.search(stripped)
+            if match:
+                current_time = float(match.group(1))
+            continue
+        if not stripped:
+            if collecting:
+                flush()
+            continue
+        if stripped.upper().startswith("SET TIMESTAMP"):
+            continue
+        if SQL_START_RE.match(stripped) and current_time is not None:
+            if collecting:
+                flush()
+            collecting = True
+            sql_parts = [stripped]
+            if stripped.rstrip().endswith(";"):
+                flush()
+            continue
+        if collecting:
+            sql_parts.append(stripped)
+            if stripped.rstrip().endswith(";"):
+                flush()
+
+    if collecting:
+        flush()
+
+    if not entries:
+        lines = slow_log.read_text(encoding="utf-8", errors="ignore").splitlines()
+        excerpt = "\n".join(lines[:SLOW_FALLBACK_LINES])
+        return (
+            "# pt-query-digest not available; no ranked app queries found. "
+            f"Showing first {SLOW_FALLBACK_LINES} lines\n\n{excerpt}\n"
+        )
+
+    entries.sort(key=lambda item: item[0], reverse=True)
+    lines = [
+        "# pt-query-digest not available; ranked by Query_time (bulk INSERT dumps skipped)",
+        "",
+    ]
+    for rank, (query_time, sql) in enumerate(entries[:SLOW_FALLBACK_TOP_N], start=1):
+        lines.append(f"{rank}. Query_time={query_time:.4f}")
+        lines.append(sql.rstrip(";") + ";")
+        lines.append("")
+    if len(entries) > SLOW_FALLBACK_TOP_N:
+        lines.append(f"_Showing top {SLOW_FALLBACK_TOP_N} of {len(entries)} queries._")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def _analyze_slow(slow_log: Path) -> str:
     digest = _run_pt_query_digest(slow_log)
     if digest is not None:
-        return digest
-    lines = slow_log.read_text(encoding="utf-8").splitlines()
-    excerpt = "\n".join(lines[:SLOW_FALLBACK_LINES])
-    return (
-        "# pt-query-digest not available; showing first "
-        f"{SLOW_FALLBACK_LINES} lines\n\n{excerpt}\n"
-    )
+        return _truncate_slow_output(digest)
+    return _truncate_slow_output(_fallback_slow_summary(slow_log))
 
 
 def _write_summary(
