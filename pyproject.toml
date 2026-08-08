@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "isuctl"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "typer>=0.12",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+isuctl = "isuctl.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/isuctl"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

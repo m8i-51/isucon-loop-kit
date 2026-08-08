@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+dist/
+work/
+out/
+.isucon-ready
+*.pem
