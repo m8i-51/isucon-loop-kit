@@ -11,6 +11,7 @@ from isuctl.config import (
     default_config_path,
     save_config,
 )
+from isuctl.discover import run_discover
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -48,6 +49,19 @@ def init_config(
     )
     save_config(path, cfg)
     typer.echo(f"wrote {path}")
+
+
+@app.command("discover")
+def discover(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+) -> None:
+    cfg = run_discover(config)
+    for h in cfg.hosts:
+        roles = ", ".join(h.role) or "(none)"
+        typer.echo(f"{h.name} ({h.host}): roles=[{roles}] remote_app_dir={h.remote_app_dir}")
+    typer.echo(f"updated {config}")
 
 
 # placeholder so imports stay stable; real commands added in later tasks
