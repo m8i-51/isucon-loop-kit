@@ -11,8 +11,10 @@ for d in /home/isucon/webapp /home/isucon/isunum /home/isucon; do
   if [ -d "$d" ]; then APP_DIR="$d"; break; fi
 done
 printf '%s\\n' "$APP_DIR"
-(systemctl is-active nginx 2>/dev/null || echo inactive)
-(systemctl is-active mysql 2>/dev/null || systemctl is-active mysqld 2>/dev/null || echo inactive)
+nginx_status=$(systemctl is-active nginx 2>/dev/null || true)
+printf '%s\\n' "${nginx_status:-inactive}"
+mysql_status=$(systemctl is-active mysql 2>/dev/null || systemctl is-active mysqld 2>/dev/null || true)
+printf '%s\\n' "${mysql_status:-inactive}"
 """
 
 

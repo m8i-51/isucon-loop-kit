@@ -71,6 +71,35 @@ def test_run_pull_requires_hosts(tmp_path: Path):
         run_pull(cfg_path)
 
 
+def test_run_pull_raises_when_no_logs_found(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+
+    def fake_ssh(ssh, host, cmd, check=True):
+        class R:
+            returncode = 1
+            stdout = ""
+            stderr = ""
+
+        return R()
+
+    with (
+        patch("isuctl.pull.run_ssh", side_effect=fake_ssh),
+        patch("isuctl.pull.rsync_file_from_remote") as rsync_mock,
+        patch("isuctl.pull.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-120000"
+        with pytest.raises(ValueError, match="no log files transferred"):
+            run_pull(cfg_path)
+
+    rsync_mock.assert_not_called()
+    captured = capsys.readouterr()
+    assert "warning: no log files found" in captured.err
+
+
 def test_cli_pull_command(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg_path = _write_config(

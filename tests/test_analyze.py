@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from isuctl.analyze import aggregate_ltsv_by_uri, run_analyze
+from isuctl.analyze import _normalize_alp_data, aggregate_ltsv_by_uri, run_analyze
 from isuctl.cli import app
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -95,4 +95,33 @@ def test_cli_analyze_command(tmp_path: Path, monkeypatch):
 
     assert result.exit_code == 0
     run_analyze_mock.assert_called_once_with(raw_dir)
-    assert "analyzed to" in result.stdout
+
+
+def test_normalize_alp_data_accepts_alp_native_keys():
+    raw = [{"uri": "/api/foo", "count": 10, "sum": 1.5, "avg": 0.15}]
+    normalized = _normalize_alp_data(raw)
+    assert normalized[0]["sum_time"] == pytest.approx(1.5)
+    assert normalized[0]["avg_time"] == pytest.approx(0.15)
+
+
+def test_run_analyze_rejects_empty_logs(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="no access.log or slow log content"):
+        run_analyze(raw_dir)
+
+
+def test_run_analyze_allow_empty(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+
+    with patch("isuctl.analyze.datetime") as dt:
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir, allow_empty=True)
+
+    assert out_dir == tmp_path / "out" / "analyze" / "20260809-130000"
+    alp = json.loads((out_dir / "alp.json").read_text(encoding="utf-8"))
+    assert alp == []

@@ -59,6 +59,7 @@ def run_deploy(
         local_dir,
         host.remote_app_dir,
         excludes=DEPLOY_EXCLUDES,
+        delete=True,
     )
     restart_cmd = (
         f"sudo systemctl restart {restart_unit} || "

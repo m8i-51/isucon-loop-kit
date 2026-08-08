@@ -99,6 +99,6 @@ def run_sync_down(config_path: Path) -> Path:
         excludes=DEFAULT_EXCLUDES,
     )
     _sync_optional_paths(config.ssh, host, local_dir)
-    mark_ready(local_dir)
     _ensure_git_repo(local_dir)
+    mark_ready(local_dir)
     return local_dir

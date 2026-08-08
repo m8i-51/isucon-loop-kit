@@ -52,7 +52,7 @@ def _make_local_remote(remote_home: Path):
         local_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, local_file)
 
-    def local_rsync_to_remote(ssh, host, local_path, remote_path, *, excludes=None):
+    def local_rsync_to_remote(ssh, host, local_path, remote_path, *, excludes=None, delete=False):
         dst = _map_remote(remote_home, remote_path.rstrip("/"))
         _copy_tree(local_path, dst, excludes=excludes)
 

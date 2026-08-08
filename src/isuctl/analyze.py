@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
+from isuctl.pack import normalize_alp_entry
 from isuctl.paths import out_dir
 
 SLOW_FALLBACK_LINES = 200
@@ -84,10 +85,18 @@ def _run_alp(access_log: Path) -> list[dict[str, float | int | str]] | None:
     return None
 
 
+def _normalize_alp_data(
+    alp_data: list[dict[str, float | int | str]],
+) -> list[dict[str, float | int | str]]:
+    normalized = [normalize_alp_entry(entry) for entry in alp_data]
+    normalized.sort(key=lambda item: float(item["sum_time"]), reverse=True)
+    return normalized
+
+
 def _analyze_access(access_log: Path) -> list[dict[str, float | int | str]]:
     alp_data = _run_alp(access_log)
     if alp_data is not None:
-        return alp_data
+        return _normalize_alp_data(alp_data)
     lines = access_log.read_text(encoding="utf-8").splitlines()
     return aggregate_ltsv_by_uri(lines)
 
@@ -150,7 +159,11 @@ def _write_summary(
     return "\n".join(lines)
 
 
-def run_analyze(raw_dir: Path | None = None) -> Path:
+def _has_log_content(path: Path) -> bool:
+    return path.exists() and path.stat().st_size > 0
+
+
+def run_analyze(raw_dir: Path | None = None, *, allow_empty: bool = False) -> Path:
     source_dir = raw_dir or _latest_raw_dir()
     if source_dir is None:
         raise ValueError("no raw log directory found; run pull first or pass --raw-dir")
@@ -158,12 +171,19 @@ def run_analyze(raw_dir: Path | None = None) -> Path:
     access_log = source_dir / "access.log"
     slow_log = source_dir / "mysql-slow.log"
 
+    has_access = _has_log_content(access_log)
+    has_slow = _has_log_content(slow_log)
+    if not allow_empty and not has_access and not has_slow:
+        raise ValueError(
+            "no access.log or slow log content found; run pull first or pass --allow-empty"
+        )
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     analyze_dir = out_dir() / "analyze" / timestamp
     analyze_dir.mkdir(parents=True, exist_ok=True)
 
     alp_data: list[dict[str, float | int | str]] = []
-    if access_log.exists():
+    if has_access:
         alp_data = _analyze_access(access_log)
     (analyze_dir / "alp.json").write_text(
         json.dumps(alp_data, indent=2) + "\n",
@@ -171,7 +191,7 @@ def run_analyze(raw_dir: Path | None = None) -> Path:
     )
 
     slow_txt = ""
-    if slow_log.exists():
+    if has_slow:
         slow_txt = _analyze_slow(slow_log)
     else:
         slow_txt = "# No slow query log found\n"
@@ -180,8 +200,8 @@ def run_analyze(raw_dir: Path | None = None) -> Path:
     summary = _write_summary(
         alp_data,
         slow_txt,
-        access_log=access_log if access_log.exists() else None,
-        slow_log=slow_log if slow_log.exists() else None,
+        access_log=access_log if has_access else None,
+        slow_log=slow_log if has_slow else None,
     )
     (analyze_dir / "summary.md").write_text(summary, encoding="utf-8")
 

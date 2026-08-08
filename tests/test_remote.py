@@ -123,6 +123,18 @@ def test_rsync_excludes(tmp_path: Path):
         assert ".git" in cmd
 
 
+def test_rsync_to_remote_delete(tmp_path: Path):
+    host = Host(name="a", host="10.0.0.1", role=["app"])
+    ssh = SshConfig(user="isucon", key="/tmp/key")
+    local = tmp_path / "work"
+    local.mkdir()
+    with patch("isuctl.remote.subprocess.run") as run:
+        run.return_value = type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        rsync_to_remote(ssh, host, local, "/home/isucon/webapp", delete=True)
+        cmd = run.call_args[0][0]
+        assert "--delete" in cmd
+
+
 def test_rsync_raises_on_failure(tmp_path: Path):
     host = Host(name="a", host="10.0.0.1", role=["app"])
     ssh = SshConfig(user="isucon", key="/tmp/key")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shlex
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -38,6 +39,7 @@ def run_pull(config_path: Path) -> Path:
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     pulled_slow = False
+    transferred = 0
     for remote_path, local_name in REMOTE_LOG_PATHS:
         if local_name == "mysql-slow.log" and pulled_slow:
             continue
@@ -45,7 +47,15 @@ def run_pull(config_path: Path) -> Path:
             continue
         local_file = raw_dir / local_name
         rsync_file_from_remote(config.ssh, host, remote_path, local_file)
+        transferred += 1
         if local_name == "mysql-slow.log":
             pulled_slow = True
+
+    if transferred == 0:
+        print(
+            "warning: no log files found on remote host; pull transferred 0 files",
+            file=sys.stderr,
+        )
+        raise ValueError("no log files transferred; check remote log paths and permissions")
 
     return raw_dir

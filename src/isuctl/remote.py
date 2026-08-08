@@ -42,7 +42,14 @@ def run_ssh(
     return result
 
 
-def _rsync(ssh: SshConfig, source: str, dest: str, excludes: list[str] | None) -> None:
+def _rsync(
+    ssh: SshConfig,
+    source: str,
+    dest: str,
+    excludes: list[str] | None,
+    *,
+    delete: bool = False,
+) -> None:
     key = str(Path(ssh.key).expanduser())
     cmd = [
         "rsync",
@@ -50,6 +57,8 @@ def _rsync(ssh: SshConfig, source: str, dest: str, excludes: list[str] | None) -
         "-e",
         f"ssh -i {shlex.quote(key)} -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
     ]
+    if delete:
+        cmd.append("--delete")
     for ex in excludes or []:
         cmd.extend(["--exclude", ex])
     cmd.extend([source, dest])
@@ -99,7 +108,8 @@ def rsync_to_remote(
     remote_path: str,
     *,
     excludes: list[str] | None = None,
+    delete: bool = False,
 ) -> None:
     source = str(local_path).rstrip("/") + "/"
     dest = f"{ssh.user}@{host.host}:{remote_path.rstrip('/')}/"
-    _rsync(ssh, source, dest, excludes)
+    _rsync(ssh, source, dest, excludes, delete=delete)

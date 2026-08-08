@@ -193,3 +193,64 @@ def test_ensure_git_repo_skips_existing_git(tmp_path: Path):
     with patch("isuctl.sync_down.subprocess.run") as run:
         _ensure_git_repo(work)
         run.assert_not_called()
+
+
+def test_run_sync_down_marks_ready_after_git_init(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+    call_order: list[str] = []
+
+    def fake_rsync(ssh, host, remote_path, local_path, *, excludes=None):
+        local_path.mkdir(parents=True, exist_ok=True)
+        (local_path / "main.go").write_text("package main\n", encoding="utf-8")
+
+    def fake_ssh(ssh, host, cmd, check=True):
+        class R:
+            returncode = 1
+            stdout = ""
+            stderr = ""
+
+        return R()
+
+    with (
+        patch("isuctl.sync_down.rsync_from_remote", side_effect=fake_rsync),
+        patch("isuctl.sync_down.run_ssh", side_effect=fake_ssh),
+        patch("isuctl.sync_down._ensure_git_repo", side_effect=lambda d: call_order.append("git")),
+        patch("isuctl.sync_down.mark_ready", side_effect=lambda d: call_order.append("ready")),
+    ):
+        run_sync_down(cfg_path)
+
+    assert call_order == ["git", "ready"]
+
+
+def test_run_sync_down_does_not_mark_ready_when_git_fails(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+
+    def fake_rsync(ssh, host, remote_path, local_path, *, excludes=None):
+        local_path.mkdir(parents=True, exist_ok=True)
+
+    def fake_ssh(ssh, host, cmd, check=True):
+        class R:
+            returncode = 1
+            stdout = ""
+            stderr = ""
+
+        return R()
+
+    with (
+        patch("isuctl.sync_down.rsync_from_remote", side_effect=fake_rsync),
+        patch("isuctl.sync_down.run_ssh", side_effect=fake_ssh),
+        patch("isuctl.sync_down._ensure_git_repo", side_effect=RuntimeError("git init failed")),
+        patch("isuctl.sync_down.mark_ready") as mark_ready_mock,
+    ):
+        with pytest.raises(RuntimeError, match="git init failed"):
+            run_sync_down(cfg_path)
+
+    mark_ready_mock.assert_not_called()

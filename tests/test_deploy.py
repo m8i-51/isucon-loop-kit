@@ -43,8 +43,8 @@ def test_deploy_runs_when_ready(tmp_path: Path, monkeypatch):
     rsync_calls: list[tuple] = []
     ssh_calls: list[str] = []
 
-    def fake_rsync(ssh, host, local_path, remote_path, *, excludes=None):
-        rsync_calls.append((host.host, local_path, remote_path, excludes))
+    def fake_rsync(ssh, host, local_path, remote_path, *, excludes=None, delete=False):
+        rsync_calls.append((host.host, local_path, remote_path, excludes, delete))
 
     def fake_ssh(ssh, host, cmd, check=True):
         ssh_calls.append(cmd)
@@ -64,11 +64,12 @@ def test_deploy_runs_when_ready(tmp_path: Path, monkeypatch):
         run_deploy(cfg_path)
 
     assert len(rsync_calls) == 1
-    host, path, remote_path, excludes = rsync_calls[0]
+    host, path, remote_path, excludes, delete = rsync_calls[0]
     assert host == "10.0.0.1"
     assert path == local_dir
     assert remote_path == "/home/isucon/webapp"
     assert excludes == DEPLOY_EXCLUDES
+    assert delete is True
     assert ".isucon-ready" in excludes
     assert DEFAULT_EXCLUDES == excludes[:-1]
     assert len(ssh_calls) == 2
@@ -102,7 +103,7 @@ def test_deploy_picks_first_app_host(tmp_path: Path, monkeypatch):
     mark_ready(tmp_path / "work")
     seen_hosts: list[str] = []
 
-    def fake_rsync(ssh, host, local_path, remote_path, *, excludes=None):
+    def fake_rsync(ssh, host, local_path, remote_path, *, excludes=None, delete=False):
         seen_hosts.append(host.host)
 
     with (
