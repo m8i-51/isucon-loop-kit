@@ -12,7 +12,7 @@ from isuctl.analyze import run_analyze
 from isuctl.config import Host, IsuconConfig, ProjectConfig, SshConfig, save_config
 from isuctl.deploy import DeployBlockedError, run_deploy
 from isuctl.pack import run_pack
-from isuctl.paths import is_ready
+from isuctl.paths import is_ready, mark_ready
 from isuctl.sync_down import run_sync_down
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -68,7 +68,7 @@ def _make_local_remote(remote_home: Path):
     return local_run_ssh, local_rsync_from_remote, local_rsync_file_from_remote, local_rsync_to_remote
 
 
-def _write_config(tmp_path: Path, *, remote_home: Path) -> Path:
+def _write_config(tmp_path: Path) -> Path:
     cfg_path = tmp_path / "isucon.toml"
     save_config(
         cfg_path,
@@ -101,7 +101,7 @@ def e2e_workspace(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     remote_home = tmp_path / "remote_home"
     shutil.copytree(FAKE_REMOTE_SRC, remote_home)
-    cfg_path = _write_config(tmp_path, remote_home=remote_home)
+    cfg_path = _write_config(tmp_path)
     ssh, rsync_from, rsync_file_from, rsync_to = _make_local_remote(remote_home)
     patches = [
         patch("isuctl.sync_down.run_ssh", side_effect=ssh),
@@ -130,8 +130,6 @@ def test_e2e_fake_remote_core_loop(e2e_workspace):
     with pytest.raises(DeployBlockedError):
         (local_dir / ".isucon-ready").unlink()
         run_deploy(cfg_path)
-
-    from isuctl.paths import mark_ready
 
     mark_ready(local_dir)
     run_deploy(cfg_path)
