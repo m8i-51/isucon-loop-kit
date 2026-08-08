@@ -16,6 +16,7 @@ from isuctl.config import (
 )
 from isuctl.deploy import DeployBlockedError, run_deploy
 from isuctl.discover import run_discover
+from isuctl.pack import run_pack
 from isuctl.pull import run_pull
 from isuctl.rollback import run_rollback
 from isuctl.snapshot import run_snapshot
@@ -152,6 +153,19 @@ def analyze(
 ) -> None:
     out = run_analyze(raw_dir)
     typer.echo(f"analyzed to {out}")
+
+
+@app.command("pack")
+def pack(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+    analyze_dir: Path | None = typer.Option(
+        None, "--analyze-dir", help="Analyze output directory (default: latest out/analyze/*)"
+    ),
+) -> None:
+    path = run_pack(config, analyze_dir)
+    typer.echo(f"packed to {path}")
 
 
 @app.command("bench-note")
