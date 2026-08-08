@@ -11,7 +11,9 @@ from isuctl.config import (
     default_config_path,
     save_config,
 )
+from isuctl.deploy import DeployBlockedError, run_deploy
 from isuctl.discover import run_discover
+from isuctl.rollback import run_rollback
 from isuctl.snapshot import run_snapshot
 from isuctl.sync_down import run_sync_down
 
@@ -74,6 +76,37 @@ def sync_down(
 ) -> None:
     local_dir = run_sync_down(config)
     typer.echo(f"synced to {local_dir}")
+
+
+@app.command("deploy")
+def deploy(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+    force: bool = typer.Option(False, "--force", help="Deploy without ready marker"),
+) -> None:
+    try:
+        run_deploy(config, force=force)
+    except DeployBlockedError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(1) from exc
+    typer.echo("deployed")
+
+
+@app.command("rollback")
+def rollback(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+    git_ref: str = typer.Option("HEAD~1", "--ref", help="Git ref to reset to"),
+    force: bool = typer.Option(False, "--force", help="Rollback without ready marker"),
+) -> None:
+    try:
+        run_rollback(config, git_ref=git_ref, force=force)
+    except DeployBlockedError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(1) from exc
+    typer.echo(f"rolled back to {git_ref} and deployed")
 
 
 @app.command("snapshot")
