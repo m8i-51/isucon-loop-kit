@@ -16,6 +16,7 @@ from isuctl.config import (
 )
 from isuctl.deploy import DeployBlockedError, run_deploy
 from isuctl.discover import run_discover
+from isuctl.ensure_access import run_ensure_access
 from isuctl.pack import run_pack
 from isuctl.pull import run_pull
 from isuctl.rollback import run_rollback
@@ -58,6 +59,16 @@ def init_config(
     )
     save_config(path, cfg)
     typer.echo(f"wrote {path}")
+
+
+@app.command("ensure-access")
+def ensure_access(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="Path to isucon.toml"
+    ),
+) -> None:
+    """Copy SSH keys from bootstrap_user (ubuntu) to contest user (isucon)."""
+    run_ensure_access(config)
 
 
 @app.command("discover")

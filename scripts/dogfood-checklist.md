@@ -9,13 +9,15 @@ Manual end-to-end verification of `isuctl` against a real ISUCON14 AMI. Check of
 - [ ] Security group allows SSH (22) from your IP
 - [ ] Note public IP / DNS as `HOST`
 
-## 2. Init config
+## 2. Init config + SSH access
 
 ```bash
-isuctl init-config --host HOST
+isuctl init-config --host HOST --key ~/.ssh/YOUR_KEY
+isuctl ensure-access   # copies ubuntu authorized_keys → isucon (AMI default)
 ```
 
 - [ ] `isucon.toml` created with `app1` host
+- [ ] `ensure-access` makes `isucon@HOST` reachable
 
 ## 3. Discover → sync-down → snapshot → bootstrap
 

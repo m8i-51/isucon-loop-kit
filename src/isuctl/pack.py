@@ -131,16 +131,30 @@ def _find_candidate_files(local_dir: Path, terms: list[str]) -> list[str]:
 def _find_schema_file(local_dir: Path) -> Path | None:
     candidates = [
         local_dir / "sql" / "schema.sql",
+        local_dir / "sql" / "1-schema.sql",
         local_dir / "db" / "schema.sql",
         local_dir / "schema.sql",
     ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    for path in local_dir.rglob("schema.sql"):
-        if path.is_file():
-            return path
-    return None
+    patterns = ("*schema*.sql", "schema.sql")
+    matches: list[Path] = []
+    for pattern in patterns:
+        for path in local_dir.rglob(pattern):
+            if path.is_file():
+                matches.append(path)
+    if not matches:
+        return None
+    # Prefer names that look like schema definitions over data dumps.
+    matches.sort(
+        key=lambda p: (
+            0 if "schema" in p.name.lower() and "data" not in p.name.lower() else 1,
+            len(str(p)),
+            str(p),
+        )
+    )
+    return matches[0]
 
 
 def _schema_excerpt(schema_path: Path | None, table_names: list[str]) -> str:

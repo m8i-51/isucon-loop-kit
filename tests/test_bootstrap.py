@@ -32,7 +32,7 @@ def test_template_files_exist_and_match_brief():
     nginx = template_path("nginx_ltsv.conf").read_text(encoding="utf-8")
     mysql = template_path("mysql_slow.cnf").read_text(encoding="utf-8")
     assert "log_format ltsv" in nginx
-    assert "access_log /var/log/nginx/access.log ltsv" in nginx
+    assert "access_log /var/log/nginx/access.ltsv.log ltsv" in nginx
     assert "slow_query_log = 1" in mysql
     assert "slow_query_log_file = /var/log/mysql/mysql-slow.log" in mysql
     assert "long_query_time = 0" in mysql
@@ -83,6 +83,8 @@ def test_run_bootstrap_uploads_snippets_and_runs_ssh(tmp_path: Path):
     assert any(NGINX_SYSTEM_PATH in cmd for cmd, _ in ssh_calls)
     assert any(MYSQL_SYSTEM_PATH in cmd for cmd, _ in ssh_calls)
     assert any("nginx" in cmd and "reload" in cmd for cmd, _ in ssh_calls)
+    assert any("chmod 644" in cmd for cmd, _ in ssh_calls)
+    assert any("restart mysql" in cmd or "restart mysqld" in cmd for cmd, _ in ssh_calls)
     assert any("alp" in cmd for cmd, _ in ssh_calls)
 
 
@@ -125,7 +127,7 @@ def test_run_bootstrap_requires_hosts(tmp_path: Path):
         run_bootstrap(cfg_path)
 
 
-def test_run_bootstrap_prints_nginx_include_instruction(tmp_path: Path, capsys):
+def test_run_bootstrap_prints_log_targets(tmp_path: Path, capsys):
     cfg_path = _write_config(
         tmp_path,
         hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
@@ -137,8 +139,8 @@ def test_run_bootstrap_prints_nginx_include_instruction(tmp_path: Path, capsys):
         run_bootstrap(cfg_path)
 
     out = capsys.readouterr().out
-    assert NGINX_REMOTE_SNIPPET in out
-    assert "include" in out.lower()
+    assert MYSQL_REMOTE_SNIPPET in out
+    assert "access.ltsv.log" in out
     assert "mysql" in out.lower()
 
 

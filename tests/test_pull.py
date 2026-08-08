@@ -60,7 +60,8 @@ def test_run_pull_copies_existing_logs(tmp_path: Path, monkeypatch):
     assert (raw_dir / "access.log").exists()
     assert (raw_dir / "mysql-slow.log").exists()
     remote_paths = [r for r, _ in rsync_calls]
-    assert "/var/log/nginx/access.log" in remote_paths
+    assert "/var/log/nginx/access.ltsv.log" in remote_paths
+    assert "/var/log/nginx/access.log" not in remote_paths
     assert "/var/log/mysql/mysql-slow.log" in remote_paths
     assert "/tmp/mysql-slow.log" not in remote_paths
 
@@ -114,3 +115,51 @@ def test_cli_pull_command(tmp_path: Path, monkeypatch):
     assert result.exit_code == 0
     run_pull_mock.assert_called_once_with(cfg_path)
     assert "pulled to" in result.stdout
+
+
+def test_run_pull_falls_back_to_sudo_copy_on_permission_denied(
+    tmp_path: Path, monkeypatch
+):
+    from isuctl.remote import RemoteError
+
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+    rsync_calls: list[str] = []
+    ssh_cmds: list[str] = []
+
+    def fake_ssh(ssh, host, cmd, check=True):
+        ssh_cmds.append(cmd)
+
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        # Prefer ltsv exists; skip slow logs for this test.
+        if "test -e" in cmd and "mysql-slow" in cmd:
+            R.returncode = 1
+        if "test -e" in cmd and "access.log" in cmd and "ltsv" not in cmd:
+            R.returncode = 1
+        return R()
+
+    def fake_rsync(ssh, host, remote_file, local_file):
+        rsync_calls.append(remote_file)
+        if remote_file.startswith("/var/log/"):
+            raise RemoteError("Permission denied (13)")
+        local_file.parent.mkdir(parents=True, exist_ok=True)
+        local_file.write_text("ok", encoding="utf-8")
+
+    with (
+        patch("isuctl.pull.run_ssh", side_effect=fake_ssh),
+        patch("isuctl.pull.rsync_file_from_remote", side_effect=fake_rsync),
+        patch("isuctl.pull.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        raw_dir = run_pull(cfg_path)
+
+    assert (raw_dir / "access.log").read_text(encoding="utf-8") == "ok"
+    assert any("sudo cp" in cmd for cmd in ssh_cmds)
+    assert any(p.startswith("/tmp/isuctl-pull-") for p in rsync_calls)

@@ -14,6 +14,7 @@ class ProjectConfig(BaseModel):
 class SshConfig(BaseModel):
     user: str = "isucon"
     key: str = "~/.ssh/id_ed25519"
+    bootstrap_user: str = "ubuntu"
 
 
 class Host(BaseModel):
@@ -47,6 +48,7 @@ def save_config(path: Path, config: IsuconConfig) -> None:
     lines.append("[ssh]")
     lines.append(f'user = "{config.ssh.user}"')
     lines.append(f'key = "{config.ssh.key}"')
+    lines.append(f'bootstrap_user = "{config.ssh.bootstrap_user}"')
     lines.append("")
     for h in config.hosts:
         lines.append("[[hosts]]")

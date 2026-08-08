@@ -6,7 +6,11 @@ from isuctl.config import Host, IsuconConfig, ProjectConfig, SshConfig, load_con
 def test_roundtrip(tmp_path: Path):
     cfg = IsuconConfig(
         project=ProjectConfig(name="demo", local_dir=str(tmp_path / "work")),
-        ssh=SshConfig(user="isucon", key="~/.ssh/id_ed25519"),
+        ssh=SshConfig(
+            user="isucon",
+            key="~/.ssh/id_ed25519",
+            bootstrap_user="ubuntu",
+        ),
         hosts=[Host(name="app1", host="1.2.3.4", role=["app", "web"])],
     )
     path = tmp_path / "isucon.toml"
@@ -15,3 +19,4 @@ def test_roundtrip(tmp_path: Path):
     assert loaded.project.name == "demo"
     assert loaded.hosts[0].host == "1.2.3.4"
     assert "app" in loaded.hosts[0].role
+    assert loaded.ssh.bootstrap_user == "ubuntu"

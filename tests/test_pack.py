@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 from isuctl.cli import app
 from isuctl.config import Host, IsuconConfig, ProjectConfig, SshConfig, save_config
-from isuctl.pack import normalize_alp_entry, run_pack
+from isuctl.pack import _find_schema_file, normalize_alp_entry, run_pack
 
 REQUIRED_HEADINGS = [
     "# ISUCON Analysis Pack",
@@ -183,3 +183,13 @@ def test_cli_pack_command(tmp_path: Path, monkeypatch):
     assert result.exit_code == 0
     run_pack_mock.assert_called_once_with(cfg_path, analyze_dir)
     assert "packed to" in result.stdout
+
+
+def test_find_schema_file_accepts_numbered_schema(tmp_path: Path):
+    sql_dir = tmp_path / "sql"
+    sql_dir.mkdir()
+    schema = sql_dir / "1-schema.sql"
+    schema.write_text("CREATE TABLE users (id INT);\n", encoding="utf-8")
+    (sql_dir / "2-master-data.sql").write_text("INSERT INTO users VALUES (1);\n", encoding="utf-8")
+    found = _find_schema_file(tmp_path)
+    assert found == schema
