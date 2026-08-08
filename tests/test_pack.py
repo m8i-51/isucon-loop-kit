@@ -123,6 +123,51 @@ def test_run_pack_requires_analyze_dir(tmp_path: Path, monkeypatch):
         run_pack(cfg_path, None)
 
 
+def test_run_pack_rejects_missing_analyze_dir(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    work = tmp_path / "work"
+    work.mkdir()
+    cfg_path = _write_config(tmp_path, work)
+    missing = tmp_path / "out" / "analyze" / "missing"
+    with pytest.raises(ValueError, match="does not exist"):
+        run_pack(cfg_path, missing)
+
+
+def test_run_pack_rejects_non_directory_analyze_dir(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    work = tmp_path / "work"
+    work.mkdir()
+    cfg_path = _write_config(tmp_path, work)
+    not_dir = tmp_path / "out" / "analyze.txt"
+    not_dir.parent.mkdir(parents=True)
+    not_dir.write_text("not a dir", encoding="utf-8")
+    with pytest.raises(ValueError, match="not a directory"):
+        run_pack(cfg_path, not_dir)
+
+
+def test_run_pack_resolves_relative_local_dir_from_cwd(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    work = tmp_path / "work"
+    work.mkdir()
+    schema_dir = work / "sql"
+    schema_dir.mkdir(parents=True)
+    (schema_dir / "schema.sql").write_text(
+        "CREATE TABLE users (id INT PRIMARY KEY);",
+        encoding="utf-8",
+    )
+
+    analyze_dir = tmp_path / "out" / "analyze" / "20260809-130000"
+    analyze_dir.mkdir(parents=True)
+    (analyze_dir / "alp.json").write_text("[]", encoding="utf-8")
+    (analyze_dir / "slow.txt").write_text("", encoding="utf-8")
+    (analyze_dir / "summary.md").write_text("# Analysis Summary\n", encoding="utf-8")
+
+    cfg_path = _write_config(tmp_path, Path("./work"))
+    pack_path = run_pack(cfg_path, analyze_dir)
+    content = pack_path.read_text(encoding="utf-8")
+    assert "CREATE TABLE users" in content
+
+
 def test_cli_pack_command(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg_path = tmp_path / "isucon.toml"

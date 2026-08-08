@@ -263,11 +263,18 @@ def _build_pack_md(
 
 def run_pack(config_path: Path, analyze_dir: Path | None = None) -> Path:
     config = load_config(config_path)
-    source_dir = analyze_dir or _latest_analyze_dir()
-    if source_dir is None:
-        raise ValueError(
-            "no analyze directory found; run analyze first or pass --analyze-dir"
-        )
+    if analyze_dir is not None:
+        if not analyze_dir.exists():
+            raise ValueError(f"analyze directory does not exist: {analyze_dir}")
+        if not analyze_dir.is_dir():
+            raise ValueError(f"analyze path is not a directory: {analyze_dir}")
+        source_dir = analyze_dir
+    else:
+        source_dir = _latest_analyze_dir()
+        if source_dir is None:
+            raise ValueError(
+                "no analyze directory found; run analyze first or pass --analyze-dir"
+            )
 
     alp_path = source_dir / "alp.json"
     slow_path = source_dir / "slow.txt"
@@ -283,7 +290,7 @@ def run_pack(config_path: Path, analyze_dir: Path | None = None) -> Path:
 
     local_dir = Path(config.project.local_dir).expanduser()
     if not local_dir.is_absolute():
-        local_dir = (config_path.parent / local_dir).resolve()
+        local_dir = (Path.cwd() / local_dir).resolve()
 
     pack_content = _build_pack_md(alp_data, slow_txt, local_dir)
     pack_path = out_dir() / "pack.md"
