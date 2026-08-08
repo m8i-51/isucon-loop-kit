@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -47,7 +48,7 @@ def _rsync(ssh: SshConfig, source: str, dest: str, excludes: list[str] | None) -
         "rsync",
         "-az",
         "-e",
-        f"ssh -i {key} -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
+        f"ssh -i {shlex.quote(key)} -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
     ]
     for ex in excludes or []:
         cmd.extend(["--exclude", ex])
