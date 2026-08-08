@@ -58,6 +58,17 @@ def _rsync(ssh: SshConfig, source: str, dest: str, excludes: list[str] | None) -
         raise RemoteError(result.stderr.strip() or f"rsync failed: {cmd}")
 
 
+def rsync_file_from_remote(
+    ssh: SshConfig,
+    host: Host,
+    remote_file: str,
+    local_file: Path,
+) -> None:
+    local_file.parent.mkdir(parents=True, exist_ok=True)
+    source = f"{ssh.user}@{host.host}:{remote_file}"
+    _rsync(ssh, source, str(local_file), None)
+
+
 def rsync_from_remote(
     ssh: SshConfig,
     host: Host,

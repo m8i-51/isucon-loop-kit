@@ -6,7 +6,7 @@ from pathlib import Path
 
 from isuctl.config import Host, load_config
 from isuctl.paths import mark_ready
-from isuctl.remote import _rsync, rsync_from_remote, run_ssh
+from isuctl.remote import rsync_file_from_remote, rsync_from_remote, run_ssh
 
 DEFAULT_EXCLUDES = [
     ".git",
@@ -33,9 +33,7 @@ def _remote_exists(ssh, host: Host, remote_path: str) -> bool:
 
 
 def _rsync_optional_file(ssh, host: Host, remote_path: str, local_file: Path) -> None:
-    local_file.parent.mkdir(parents=True, exist_ok=True)
-    source = f"{ssh.user}@{host.host}:{remote_path}"
-    _rsync(ssh, source, str(local_file), None)
+    rsync_file_from_remote(ssh, host, remote_path, local_file)
 
 
 def _rsync_optional_dir(
