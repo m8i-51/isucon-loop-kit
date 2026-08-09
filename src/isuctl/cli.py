@@ -4,7 +4,13 @@ import typer
 
 from isuctl import __version__
 from isuctl.analyze import run_analyze
-from isuctl.bench_note import run_bench_note
+from isuctl.bench_note import (
+    compare_score,
+    format_comparison_lines,
+    format_history_lines,
+    read_scores,
+    run_bench_note,
+)
 from isuctl.bootstrap import run_bootstrap
 from isuctl.config import (
     Host,
@@ -195,9 +201,36 @@ def pack(
 
 @app.command("bench-note")
 def bench_note(
-    score: int = typer.Argument(..., help="ベンチマークスコア"),
+    score: int | None = typer.Argument(
+        None, help="ベンチマークスコア（省略時は対話入力）"
+    ),
     note: str = typer.Option("", "--note", "-n", help="任意メモ"),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="低下時の確認プロンプトをスキップする"
+    ),
 ) -> None:
-    """スコアとメモを履歴に残す。"""
+    """ベンチ後のスコアをユーザー報告として履歴に残す。"""
+    history = read_scores()
+    for line in format_history_lines(history):
+        typer.echo(line)
+
+    if score is None:
+        score = typer.prompt("ベンチ後のスコアを入力してください", type=int)
+
+    comparison = compare_score(score, history)
+    for line in format_comparison_lines(comparison):
+        if line.startswith("注意:"):
+            typer.secho(line, fg=typer.colors.YELLOW)
+        else:
+            typer.echo(line)
+
+    if (
+        comparison.is_regression_vs_previous
+        and not yes
+        and not typer.confirm("前回より低いスコアを記録しますか?", default=True)
+    ):
+        typer.echo("記録をキャンセルしました")
+        raise typer.Exit(1)
+
     path = run_bench_note(score, note=note)
     typer.echo(f"記録先: {path}")

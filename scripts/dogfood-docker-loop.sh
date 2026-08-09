@@ -53,7 +53,15 @@ log "pull → analyze → pack"
 isuctl pull
 isuctl analyze
 isuctl pack
-isuctl bench-note 0 --note "docker dogfood" || true
+
+log "bench-note (user-reported score)"
+if [[ -n "${BENCH_SCORE:-}" ]]; then
+  isuctl bench-note "$BENCH_SCORE" --yes --note "${BENCH_NOTE:-docker dogfood}" || true
+elif [[ -t 0 ]]; then
+  isuctl bench-note --note "${BENCH_NOTE:-docker dogfood}" || true
+else
+  log "skip bench-note (non-interactive). Re-run: isuctl bench-note"
+fi
 
 log "done — see out/pack.md and out/analyze/"
 ls -la out/pack.md out/analyze 2>/dev/null || true
