@@ -1,0 +1,45 @@
+# Overlay for isucon14 development/compose-python.yml
+# Usage (from /opt/isucon14/development):
+#   docker compose -f compose-python.yml -f /path/to/compose.dogfood.yml up -d --build
+
+services:
+  webapp:
+    build:
+      context: ../webapp/python
+      dockerfile: ../../development/dockerfiles/Dockerfile.python.dogfood
+    environment:
+      ENV: local-dev
+      ISUCON_DB_HOST: db
+
+  nginx:
+    volumes:
+      - ${ISUCON_LOOP_KIT_ROOT}/assets/isucon14-docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - dogfood_nginx_logs:/var/log/nginx
+
+  db:
+    volumes:
+      - ${ISUCON_LOOP_KIT_ROOT}/assets/isucon14-docker/mysql/slow.cnf:/etc/mysql/conf.d/slow.cnf:ro
+
+  contest-ssh:
+    build:
+      context: ${ISUCON_LOOP_KIT_ROOT}/assets/isucon14-docker
+      dockerfile: Dockerfile.ssh
+    ports:
+      - "2222:22"
+    volumes:
+      - ../webapp:/home/isucon/webapp
+      - dogfood_nginx_logs:/var/log/nginx
+      - dogfood_ssh_keys:/ssh-keys:ro
+      - dogfood_mysql_slow_share:/var/log/mysql
+    depends_on:
+      - nginx
+      - db
+
+volumes:
+  dogfood_nginx_logs:
+    name: dogfood_nginx_logs
+  dogfood_ssh_keys:
+    name: dogfood_ssh_keys
+    external: true
+  dogfood_mysql_slow_share:
+    name: dogfood_mysql_slow_share
