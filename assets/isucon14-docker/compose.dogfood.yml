@@ -1,6 +1,7 @@
 # Overlay for isucon14 development/compose-python.yml
 # Usage (from /opt/isucon14/development):
-#   docker compose -f compose-python.yml -f /path/to/compose.dogfood.yml up -d --build
+#   export ISUCON_LOOP_KIT_ROOT=/path/to/isucon-loop-kit
+#   docker compose -f compose-python.yml -f "$ISUCON_LOOP_KIT_ROOT/assets/isucon14-docker/compose.dogfood.yml" up -d --build
 
 services:
   webapp:
@@ -18,6 +19,8 @@ services:
 
   db:
     volumes:
+      - dogfood_mysql_data:/var/lib/mysql
+      - ../webapp/sql:/docker-entrypoint-initdb.d
       - ${ISUCON_LOOP_KIT_ROOT}/assets/isucon14-docker/mysql/slow.cnf:/etc/mysql/conf.d/slow.cnf:ro
 
   contest-ssh:
@@ -43,3 +46,5 @@ volumes:
     external: true
   dogfood_mysql_slow_share:
     name: dogfood_mysql_slow_share
+  dogfood_mysql_data:
+    name: dogfood_mysql_data
