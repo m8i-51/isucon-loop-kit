@@ -2,95 +2,72 @@
 
 ソロ向け ISUCON ループキット（`isuctl`）。
 
-**手元（laptop）** から SSH / rsync で競技 EC2 を操作する薄い CLI です。競技サーバ上では動かしません。
+手元（laptop）から SSH / rsync で競技 EC2 を操作する薄い CLI です。競技サーバ上では動かしません。
 
 ```text
 discover → sync-down → 編集 → deploy → bench → pull → analyze → pack → bench-note
 ```
 
-可視化は `out/pack.md` を主、必要なら laptop 側の [pprotein](assets/pprotein/README.md)。自作ダッシュボードは想定しません。
+主成果物は `out/pack.md`。可視化が足りなければ laptop の [pprotein](assets/pprotein/README.md) を足す想定で、自作ダッシュボードは作りません。
 
 ## 前提
 
-- Python **3.12+**
+- Python 3.12+
 - `ssh` / `rsync`
-- 競技 EC2 へ入れる SSH 鍵
-- （任意）`alp` / `pt-query-digest` — 無くても `analyze` はフォールバックする
+- 競技 EC2 用の SSH 鍵
+- （任意）`alp` / `pt-query-digest` — 無くても `analyze` は動く
 
 ## セットアップ
 
 ```bash
 git clone https://github.com/m8i-51/isucon-loop-kit.git
 cd isucon-loop-kit
-
-python3.12 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
-# 開発時: pip install -e ".[dev]"
-# または: uv sync --extra dev
-
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e .            # 開発: pip install -e ".[dev]"  /  uv sync --extra dev
 isuctl --help
 ```
 
-## 典型フロー
+`isucon.toml` / `work/` / `out/` / 鍵は git 管理外です。
+
+## 使い方
 
 ```bash
-# 初回（リポジトリ直下で。isucon.toml がここにできる）
+# 初回（リポジトリ直下）
 isuctl init-config --host HOST --key ~/.ssh/YOUR_KEY
-isuctl ensure-access   # ubuntu → isucon の鍵コピーが必要な AMI 向け
-isuctl discover
-isuctl sync-down
-isuctl snapshot
-isuctl bootstrap       # nginx LTSV / MySQL slow / alp など
+isuctl ensure-access        # 必要な AMI のみ（ubuntu → isucon）
+isuctl discover && isuctl sync-down
+isuctl snapshot && isuctl bootstrap
 
 # 改善ループ
-isuctl deploy          # work/ を編集・コミットしたあと
-# （EC2 上でベンチを実行）
-isuctl pull
-isuctl analyze
-isuctl pack            # out/pack.md
-isuctl bench-note      # スコアは対話入力（引数でも可）
+isuctl deploy               # work/ を編集・コミットしたあと
+# EC2 上でベンチを実行（isuctl は起動しない）
+isuctl pull && isuctl analyze && isuctl pack
+isuctl bench-note           # スコア報告（対話。引数でも可）
 ```
 
-`init-config` の既定は `user=isucon` / `bootstrap_user=ubuntu`。
+既定ユーザーは `isucon`（`bootstrap_user=ubuntu`）。
 
-### スコア報告（`bench-note`）
+**`bench-note`:** 前回・最高との差分を出し、前回より低いときは記録前に確認します（`--yes` で省略可）。戻すなら `isuctl rollback`。
 
-ベンチ本体は EC2 上で叩きます。終わったら手元でスコアを報告します。
+## Docker 犬食い
 
-```bash
-isuctl bench-note                 # 対話で入力
-isuctl bench-note 12345 -n "memo" # 引数で直接
-```
-
-- 前回・最高との差分を表示する
-- 前回より低いときは記録前に確認する（`--yes` でスキップ可）
-- 悪化を残したくないときは `isuctl rollback`
-
-## Docker 犬食い（AMI なし）
-
-Cloud Agent / 手元 Docker 向け。詳細は [assets/isucon14-docker/README.md](assets/isucon14-docker/README.md)。
+AMI なしで一通り回す（Cloud Agent / 手元 Docker）:
 
 ```bash
 ./scripts/dogfood-docker-up.sh
-./scripts/dogfood-docker-loop.sh
-# スコアを入れるなら: BENCH_SCORE=12345 ./scripts/dogfood-docker-loop.sh
+./scripts/dogfood-docker-loop.sh          # 任意: BENCH_SCORE=12345
 ```
 
-実 AMI の手動 E2E は [scripts/dogfood-checklist.md](scripts/dogfood-checklist.md)。
-
-## 注意
-
-- `isucon.toml` / `work/` / `out/` / 鍵は git 管理外
-- `isuctl` はベンチ起動まではしない
-- 監視用 EC2 を競技 VPC に同居させない（pprotein は laptop）
+詳細: [Docker 犬食い](assets/isucon14-docker/README.md) / 実 AMI: [チェックリスト](scripts/dogfood-checklist.md)
 
 ## ドキュメント
 
-| 文書 | 内容 |
+| | |
 | --- | --- |
-| [設計メモ](docs/superpowers/specs/2026-08-09-isucon-loop-kit-design.md) | 全体方針 |
-| [pprotein](assets/pprotein/README.md) | alp / slow の任意ビューア |
+| [設計](docs/superpowers/specs/2026-08-09-isucon-loop-kit-design.md) | 方針 |
+| [pprotein](assets/pprotein/README.md) | alp / slow ビューア（laptop） |
 | [Docker 犬食い](assets/isucon14-docker/README.md) | compose + SSH ターゲット |
-| [AMI 犬食いチェックリスト](scripts/dogfood-checklist.md) | 実機 E2E とハマりどころ |
+| [AMI チェックリスト](scripts/dogfood-checklist.md) | 実機 E2E・ハマりどころ |
 | [matcher-http.service](assets/isucon14/matcher-http.service) | ISUCON14 CODE=32 回避例 |
+
+監視用 EC2 を競技 VPC に置かないこと。
