@@ -14,6 +14,8 @@ discover → sync-down → ローカル編集 → deploy → bench → pull → 
 
 重いダッシュボードは作らず、可視化は laptop 側の pprotein などを使う前提です。
 
+Cloud Agent / 手元 Docker では [ISUCON14 Python compose + SSH ターゲット](assets/isucon14-docker/README.md) で犬食いできます（`./scripts/dogfood-docker-up.sh` → `./scripts/dogfood-docker-loop.sh`）。
+
 ## 前提
 
 - Python **3.12+**
@@ -76,5 +78,6 @@ isuctl bench-note SCORE --note "memo"
 ## ドキュメント
 
 - [pprotein セットアップ](assets/pprotein/README.md) — 監視は競技 VPC 内ではなく laptop で動かす
+- [ISUCON14 Docker 犬食い](assets/isucon14-docker/README.md) — Cloud Agent / 手元 compose（AMI 代替）
 - [ISUCON14 犬食いチェックリスト](scripts/dogfood-checklist.md) — 実 AMI での手動 E2E 手順と既知のハマりどころ
 - [matcher 直叩き unit 例](assets/isucon14/matcher-http.service) — CODE=32 回避用（nginx/TLS 経由を避ける）

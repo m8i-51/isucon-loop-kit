@@ -1,0 +1,21 @@
+FROM public.ecr.aws/docker/library/ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      openssh-server sudo rsync ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /var/run/sshd /home/isucon/.ssh /var/log/nginx /var/log/mysql \
+ && useradd -m -s /bin/bash isucon \
+ && echo 'isucon ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/isucon \
+ && chmod 440 /etc/sudoers.d/isucon \
+ && ssh-keygen -A \
+ && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
+ && sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+
+COPY ssh/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 22
+CMD ["/entrypoint.sh"]
