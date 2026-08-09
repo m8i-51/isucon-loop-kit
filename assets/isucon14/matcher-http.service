@@ -1,4 +1,4 @@
-# ISUCON14 犬食い / 初期練習向け matcher unit 例
+# ISUCON14 ドックフーディング / 初期練習向け matcher unit 例
 # nginx+TLS を経由せずアプリ :8080 を直接叩く（CODE=32 回避）
 #
 # 入れ方:

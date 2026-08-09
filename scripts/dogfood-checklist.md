@@ -1,4 +1,4 @@
-# ISUCON14 犬食いチェックリスト
+# ISUCON14 ドックフーディング チェックリスト
 
 実 ISUCON14 AMI に対する `isuctl` の手動 E2E 確認。各ステップをチェックする。
 
@@ -85,7 +85,7 @@ isuctl bench-note --note "dogfood run"   # スコアを対話で報告（また�
 
 - **非バースト** インスタンス（`c5.large+`）を使う。`t3.*` でクレジット 0 → 初期実装でも CODE=32
 - 既定 matcher は `https://isuride...` を nginx/TLS 経由で叩く。負荷時に詰まってマッチングが飢餓する
-  犬食い / 初期練習向けの直し方:
+  ドックフーディング / 初期練習向けの直し方:
   `assets/isucon14/matcher-http.service` も参照。
   ```bash
   # /etc/systemd/system/isuride-matcher.service の ExecStart:

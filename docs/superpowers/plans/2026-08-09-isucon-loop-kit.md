@@ -16,7 +16,7 @@
 - `deploy` は成功した `sync-down` 前は拒否（`--force` はテスト/緊急のみ）
 - ファイルは小さく単一目的。インライン import 禁止
 - CLI のユーザー向け文言は日本語。識別子は英語のまま
-- 犬食い対象: ISUCON14 AMI（`ami-0e334c50145a3ee41` または matsuu 代替）
+- ドックフーディング対象: ISUCON14 AMI（`ami-0e334c50145a3ee41` または matsuu 代替）
 
 ---
 

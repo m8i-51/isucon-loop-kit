@@ -1,4 +1,4 @@
-# ISUCON14 Docker dogfood（Cloud Agent / laptop）
+# ISUCON14 Docker ドックフーディング（Cloud Agent / laptop）
 
 公式 [isucon/isucon14](https://github.com/isucon/isucon14) の `development/compose-python.yml` をベースに、**`isuctl` が SSH できる薄い contest ターゲット**を足した構成です。AMI 完全再現ではありません。
 
