@@ -69,6 +69,7 @@ cp "$KEY_PATH.pub" "$AUTH_KEYS"
 docker volume create dogfood_ssh_keys >/dev/null
 docker volume create dogfood_nginx_logs >/dev/null
 docker volume create dogfood_mysql_slow_share >/dev/null
+docker volume create dogfood_mysql_data >/dev/null
 docker run --rm \
   -v dogfood_ssh_keys:/keys \
   -v "$AUTH_KEYS:/authorized_keys:ro" \
