@@ -49,7 +49,7 @@ isuctl bench-note           # スコア報告（対話。引数でも可）
 
 **`bench-note`:** 前回・最高との差分を出し、前回より低いときは記録前に確認します（`--yes` で省略可）。戻すなら `isuctl rollback`。
 
-## Docker 犬食い
+## Docker ドックフーディング
 
 AMI なしで一通り回す（Cloud Agent / 手元 Docker）:
 
@@ -58,7 +58,7 @@ AMI なしで一通り回す（Cloud Agent / 手元 Docker）:
 ./scripts/dogfood-docker-loop.sh          # 任意: BENCH_SCORE=12345
 ```
 
-詳細: [Docker 犬食い](assets/isucon14-docker/README.md) / 実 AMI: [チェックリスト](scripts/dogfood-checklist.md)
+詳細: [Docker ドックフーディング](assets/isucon14-docker/README.md) / 実 AMI: [チェックリスト](scripts/dogfood-checklist.md)
 
 ## ドキュメント
 
@@ -66,7 +66,7 @@ AMI なしで一通り回す（Cloud Agent / 手元 Docker）:
 | --- | --- |
 | [設計](docs/superpowers/specs/2026-08-09-isucon-loop-kit-design.md) | 方針 |
 | [pprotein](assets/pprotein/README.md) | alp / slow ビューア（laptop） |
-| [Docker 犬食い](assets/isucon14-docker/README.md) | compose + SSH ターゲット |
+| [Docker ドックフーディング](assets/isucon14-docker/README.md) | compose + SSH ターゲット |
 | [AMI チェックリスト](scripts/dogfood-checklist.md) | 実機 E2E・ハマりどころ |
 | [matcher-http.service](assets/isucon14/matcher-http.service) | ISUCON14 CODE=32 回避例 |
 
