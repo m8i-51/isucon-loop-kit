@@ -6,10 +6,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-export PATH="/usr/local/go/bin:${PATH:-}"
+export PATH="${ROOT}/.venv/bin:/usr/local/go/bin:${HOME}/.local/bin:${PATH:-}"
 
 if ! command -v isuctl >/dev/null 2>&1; then
-  python3 -m pip install -e . >/dev/null
+  if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="${HOME}/.local/bin:${PATH}"
+  fi
+  uv sync >/dev/null
+  export PATH="${ROOT}/.venv/bin:${PATH}"
 fi
 
 log() { printf '[dogfood-loop] %s\n' "$*"; }

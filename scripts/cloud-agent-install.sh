@@ -6,8 +6,13 @@ cd /workspace
 
 export PATH="$HOME/.local/bin:/usr/local/go/bin:$PATH"
 
-python3 -m pip install -e . --quiet
-python3 -m pip install -e '.[dev]' --quiet || true
+# Prefer uv (PEP 668 blocks bare pip on many Cloud Agent images).
+if ! command -v uv >/dev/null 2>&1; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+uv sync --extra dev
+export PATH="/workspace/.venv/bin:$PATH"
 
 # Host tools needed by isuctl / dogfood scripts
 if ! command -v rsync >/dev/null 2>&1; then
