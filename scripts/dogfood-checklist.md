@@ -63,7 +63,7 @@ laptop 側:
 isuctl pull
 isuctl analyze
 isuctl pack
-isuctl bench-note SCORE --note "dogfood run"
+isuctl bench-note --note "dogfood run"   # スコアを対話で報告（または SCORE を引数に）
 ```
 
 - [ ] ベンチが完走（マッチング失敗は別途メモ）
@@ -79,7 +79,7 @@ isuctl bench-note SCORE --note "dogfood run"
 ## 任意
 
 - [ ] laptop で pprotein + SSH トンネル — [assets/pprotein/README.md](../assets/pprotein/README.md)
-- [ ] ベンチ後に `isuctl bench-note SCORE --note "dogfood run"`
+- [ ] ベンチ後に `isuctl bench-note` でスコアを報告した（低下時は rollback を検討）
 
 ## 既知のハマりどころ（ISUCON14 AMI）
 

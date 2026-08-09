@@ -286,7 +286,8 @@ def _format_hypotheses(
     if alp_data:
         top_uri = str(alp_data[0]["uri"])
         lines.append(f"- [ ] `{top_uri}` のハンドラと DB 呼び出しを追う")
-    lines.append("- [ ] 変更後に再ベンチし scores.jsonl と比較する")
+    lines.append("- [ ] 変更後に再ベンチし `isuctl bench-note` でスコアを報告する")
+    lines.append("- [ ] scores.jsonl で前回/最高と比較し、低下なら rollback を検討する")
     return "\n".join(lines) + "\n"
 
 

@@ -64,7 +64,8 @@ isuctl deploy
 isuctl pull
 isuctl analyze
 isuctl pack
-isuctl bench-note SCORE --note "memo"
+isuctl bench-note              # スコアは対話入力（引数でも可）
+# 前回より下がっていたら確認が出る。戻すなら isuctl rollback
 ```
 
 `init-config` の既定は `user=isucon` / `bootstrap_user=ubuntu`。鍵パスは自分のものを指定する。
