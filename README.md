@@ -8,7 +8,31 @@
 discover → sync-down → 編集 → deploy → bench → pull → analyze → pack → bench-note
 ```
 
-主成果物は `out/pack.md`。可視化が足りなければ laptop の [pprotein](assets/pprotein/README.md) を足す想定で、自作ダッシュボードは作りません。
+主成果物は `out/pack.md`。Cursor / Claude Code など生成AIが読んで次の一手を出す想定で、自作ダッシュボードは作りません。人が深く掘るときは `out/analyze/*` か laptop の [pprotein](assets/pprotein/README.md)。
+
+## 大会当日
+
+| 役割 | やること |
+| --- | --- |
+| あなた | EC2・ベンチ・`bench-note`・deploy / rollback の判断 |
+| 生成AI | `out/pack.md`（必要なら `out/analyze/*`）と `work/` を読んで、仮説 **1 つ**だけ直す |
+
+**最初の30分**
+
+1. EC2 起動、ポータル確認
+2. 何もいじらず初手ベンチ → `isuctl bench-note`（基準点）
+3. `init-config`（未作成なら）→ `discover` → `sync-down` → `snapshot` → `bootstrap`
+4. 再ベンチ → `pull` → `analyze` → `pack`
+5. AI に `out/pack.md` を渡して次の仮説を1つ選ぶ
+
+**改善ループ**
+
+1. AI がパッチ → コミット → `deploy`
+2. EC2 でベンチ
+3. `pull` → `analyze` → `pack` → また AI へ
+4. `bench-note` … 上がれば残す / 下がれば `rollback`
+
+計測なしの全面書き換えは後回し。終盤に再起動耐性を見る。
 
 ## 前提
 
