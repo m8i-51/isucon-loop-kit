@@ -72,8 +72,9 @@ def test_deploy_runs_when_ready(tmp_path: Path, monkeypatch):
     assert delete is True
     assert ".isucon-ready" in excludes
     assert DEFAULT_EXCLUDES == excludes[:-1]
-    assert len(ssh_calls) == 2
-    assert "systemctl restart isucon-python.service" in ssh_calls[0]
+    assert "systemctl restart" in ssh_calls[0]
+    assert "isucon-python.service" in ssh_calls[0]
+    assert "isuride-python.service" in ssh_calls[0]
     assert "curl -fsS http://127.0.0.1/" in ssh_calls[1]
 
 
@@ -181,7 +182,8 @@ def test_deploy_custom_restart_unit(tmp_path: Path, monkeypatch):
     ):
         run_deploy(cfg_path, restart_unit="myapp.service")
 
-    assert "systemctl restart myapp.service" in ssh_calls[0]
+    assert "myapp.service" in ssh_calls[0]
+    assert "systemctl restart" in ssh_calls[0]
 
 
 def test_cli_deploy_command(tmp_path: Path, monkeypatch):

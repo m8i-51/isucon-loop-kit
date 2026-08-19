@@ -88,20 +88,89 @@ def _latest_raw_dir() -> Path | None:
     return dirs[0] if dirs else None
 
 
+def parse_alp_stdout(text: str) -> list[dict[str, float | int | str]] | None:
+    """Parse alp --format json (dict rows or header matrix) or TSV."""
+    stripped = text.strip()
+    if not stripped:
+        return None
+    if stripped[0] in "[{":
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return [item for item in data if isinstance(item, dict)]
+        if (
+            isinstance(data, list)
+            and len(data) >= 2
+            and isinstance(data[0], list)
+        ):
+            headers = [str(h) for h in data[0]]
+            rows: list[dict[str, float | int | str]] = []
+            for row in data[1:]:
+                if not isinstance(row, list):
+                    continue
+                rows.append(dict(zip(headers, row, strict=False)))
+            return rows or None
+        return None
+    return _parse_alp_tsv(stripped)
+
+
+def _parse_alp_tsv(text: str) -> list[dict[str, float | int | str]] | None:
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return None
+    header = [col.strip() for col in lines[0].split("\t")]
+    start = 0
+    colnames: list[str]
+    if header and header[0] in {"count", "method", "uri"}:
+        colnames = header
+        start = 1
+    else:
+        colnames = ["count", "uri", "sum", "avg"]
+    rows: list[dict[str, float | int | str]] = []
+    for line in lines[start:]:
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        rows.append(dict(zip(colnames, parts, strict=False)))
+    return rows or None
+
+
+def _alp_command(access_log: Path) -> list[str]:
+    # alp -f is --filters, not the log file. --output is the column list, not JSON.
+    return [
+        "alp",
+        "ltsv",
+        "--file",
+        str(access_log),
+        "--format",
+        "tsv",
+        "--output",
+        "count,uri,sum,avg",
+        "--uri-label",
+        "uri",
+        "--method-label",
+        "request_method",
+        "--reqtime-label",
+        "request_time",
+        "--apptime-label",
+        "upstream_response_time",
+        "--sort",
+        "sum",
+        "--reverse",
+    ]
+
+
 def _run_alp(access_log: Path) -> list[dict[str, float | int | str]] | None:
     if shutil.which("alp") is None:
         return None
-    cmd = ["alp", "ltsv", "-f", str(access_log), "--output", "json"]
-    result = subprocess.run(cmd, text=True, capture_output=True, check=False)
+    result = subprocess.run(
+        _alp_command(access_log), text=True, capture_output=True, check=False
+    )
     if result.returncode != 0:
         return None
-    try:
-        data = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
-    if isinstance(data, list):
-        return data
-    return None
+    return parse_alp_stdout(result.stdout)
 
 
 def _merge_by_normalized_uri(
@@ -140,9 +209,16 @@ def _normalize_alp_data(
     return _merge_by_normalized_uri(alp_data)
 
 
+def _alp_has_usable_times(
+    alp_data: list[dict[str, float | int | str]],
+) -> bool:
+    normalized = _normalize_alp_data(alp_data)
+    return any(float(item["sum_time"]) > 0 for item in normalized)
+
+
 def _analyze_access(access_log: Path) -> list[dict[str, float | int | str]]:
     alp_data = _run_alp(access_log)
-    if alp_data is not None:
+    if alp_data is not None and _alp_has_usable_times(alp_data):
         return _normalize_alp_data(alp_data)
     lines = access_log.read_text(encoding="utf-8").splitlines()
     return aggregate_ltsv_by_uri(lines)

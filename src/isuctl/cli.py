@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
@@ -25,6 +26,7 @@ from isuctl.discover import run_discover
 from isuctl.ensure_access import run_ensure_access
 from isuctl.pack import run_pack
 from isuctl.pull import run_pull
+from isuctl.remote import RemoteError
 from isuctl.rollback import run_rollback
 from isuctl.snapshot import run_snapshot
 from isuctl.sync_down import run_sync_down
@@ -36,6 +38,14 @@ def _version_callback(value: bool) -> None:
     if value:
         typer.echo(__version__)
         raise typer.Exit()
+
+
+def _cli_call[T](fn: Callable[..., T], *args: object, **kwargs: object) -> T:
+    try:
+        return fn(*args, **kwargs)
+    except (DeployBlockedError, RemoteError, ValueError, RuntimeError) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(1) from exc
 
 
 @app.callback()
@@ -53,6 +63,9 @@ def init_config(
     host: str = typer.Option(..., help="プライマリホストの IP / DNS"),
     user: str = typer.Option("isucon", help="SSH ユーザー"),
     key: str = typer.Option("~/.ssh/id_ed25519", help="SSH 秘密鍵パス"),
+    bootstrap_user: str = typer.Option(
+        "ubuntu", help="AMI 初期ユーザー（ensure-access で鍵をコピーする元）"
+    ),
 ) -> None:
     """isucon.toml を新規作成する。"""
     path = default_config_path()
@@ -61,7 +74,7 @@ def init_config(
         raise typer.Exit(1)
     cfg = IsuconConfig(
         project=ProjectConfig(name=name, local_dir="./work"),
-        ssh=SshConfig(user=user, key=key),
+        ssh=SshConfig(user=user, key=key, bootstrap_user=bootstrap_user),
         hosts=[Host(name="app1", host=host, role=["app", "web", "db"])],
     )
     save_config(path, cfg)
@@ -75,7 +88,7 @@ def ensure_access(
     ),
 ) -> None:
     """bootstrap_user (ubuntu) の SSH 鍵を競技ユーザー (isucon) へコピーする。"""
-    run_ensure_access(config)
+    _cli_call(run_ensure_access, config)
 
 
 @app.command("discover")
@@ -85,7 +98,7 @@ def discover(
     ),
 ) -> None:
     """リモートを探索して roles / remote_app_dir を埋める。"""
-    cfg = run_discover(config)
+    cfg = _cli_call(run_discover, config)
     for h in cfg.hosts:
         roles = ", ".join(h.role) or "(なし)"
         typer.echo(f"{h.name} ({h.host}): roles=[{roles}] remote_app_dir={h.remote_app_dir}")
@@ -99,7 +112,7 @@ def sync_down(
     ),
 ) -> None:
     """EC2 から手元へコードを取得する。"""
-    local_dir = run_sync_down(config)
+    local_dir = _cli_call(run_sync_down, config)
     typer.echo(f"同期先: {local_dir}")
 
 
@@ -113,11 +126,7 @@ def deploy(
     ),
 ) -> None:
     """手元の変更をリモートへ rsync デプロイする。"""
-    try:
-        run_deploy(config, force=force)
-    except DeployBlockedError as exc:
-        typer.secho(str(exc), fg=typer.colors.RED)
-        raise typer.Exit(1) from exc
+    _cli_call(run_deploy, config, force=force)
     typer.echo("デプロイ完了")
 
 
@@ -131,12 +140,8 @@ def rollback(
         False, "--force", help="ready マーカーなしでもロールバックする"
     ),
 ) -> None:
-    """指定 ref に戻して再デプロイする。"""
-    try:
-        run_rollback(config, git_ref=git_ref, force=force)
-    except DeployBlockedError as exc:
-        typer.secho(str(exc), fg=typer.colors.RED)
-        raise typer.Exit(1) from exc
+    """指定 ref に戻して再デプロイする（git reset --hard）。"""
+    _cli_call(run_rollback, config, git_ref=git_ref, force=force)
     typer.echo(f"{git_ref} へロールバックしてデプロイしました")
 
 
@@ -147,7 +152,7 @@ def bootstrap(
     ),
 ) -> None:
     """nginx LTSV / MySQL slow / alp / pt-query-digest などを初期配備する。"""
-    run_bootstrap(config)
+    _cli_call(run_bootstrap, config)
     typer.echo("bootstrap 完了")
 
 
@@ -159,7 +164,7 @@ def snapshot(
     label: str | None = typer.Option(None, "--label", "-l", help="任意のスナップショット名"),
 ) -> None:
     """リモートに復元ポイントを作る。"""
-    remote_path = run_snapshot(config, label=label)
+    remote_path = _cli_call(run_snapshot, config, label=label)
     typer.echo(f"snapshot: {remote_path}")
 
 
@@ -170,7 +175,7 @@ def pull(
     ),
 ) -> None:
     """リモートからログを取得する。"""
-    raw_dir = run_pull(config)
+    raw_dir = _cli_call(run_pull, config)
     typer.echo(f"取得先: {raw_dir}")
 
 
@@ -181,7 +186,7 @@ def analyze(
     ),
 ) -> None:
     """alp / slow 解析を実行する。"""
-    out = run_analyze(raw_dir)
+    out = _cli_call(run_analyze, raw_dir)
     typer.echo(f"解析結果: {out}")
 
 
@@ -195,7 +200,7 @@ def pack(
     ),
 ) -> None:
     """Cursor 用の分析パックを作る。"""
-    path = run_pack(config, analyze_dir)
+    path = _cli_call(run_pack, config, analyze_dir)
     typer.echo(f"パック出力: {path}")
 
 

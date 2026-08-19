@@ -39,7 +39,7 @@ discover → sync-down → 編集 → deploy → bench → pull → analyze → 
 - Python 3.12+
 - `ssh` / `rsync`
 - 競技 EC2 用の SSH 鍵
-- （任意）`alp` / `pt-query-digest` — 無くても `analyze` は動く
+- （任意）laptop 側の `alp` / `pt-query-digest` — `analyze` は手元で動く。無くてもフォールバックする
 
 ## セットアップ
 
@@ -63,7 +63,7 @@ isuctl discover && isuctl sync-down
 isuctl snapshot && isuctl bootstrap
 
 # 改善ループ
-isuctl deploy               # work/ を編集・コミットしたあと
+isuctl deploy               # work/ を編集・コミットしたあと（isuride-* / isucon-* を順に再起動）
 # EC2 上でベンチを実行（isuctl は起動しない）
 isuctl pull && isuctl analyze && isuctl pack
 isuctl bench-note           # スコア報告（対話。引数でも可）

@@ -20,6 +20,7 @@ def test_ssh_base_args_expands_identity():
     assert "-i" in args
     i = args.index("-i")
     assert not args[i + 1].startswith("~")
+    assert "ConnectTimeout=10" in args
 
 
 def test_run_ssh_success():
@@ -94,6 +95,7 @@ def test_rsync_from_remote(tmp_path: Path):
         assert cmd[0] == "rsync"
         assert "isucon@10.0.0.1:/home/isucon/webapp/" in cmd
         assert str(local) + "/" in cmd
+        assert "ConnectTimeout=10" in cmd[cmd.index("-e") + 1]
 
 
 def test_rsync_to_remote(tmp_path: Path):

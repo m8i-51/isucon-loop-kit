@@ -126,7 +126,7 @@ ssh -o BatchMode=yes isucon-dogfood true
 cd "$ROOT"
 if [[ ! -f isucon.toml ]]; then
   if command -v isuctl >/dev/null 2>&1; then
-    isuctl init-config --name isucon14-docker --host isucon-dogfood --user isucon --key "$KEY_PATH"
+    isuctl init-config --name isucon14-docker --host isucon-dogfood --user isucon --key "$KEY_PATH" --bootstrap-user isucon
   else
     cat > isucon.toml <<EOF
 [project]

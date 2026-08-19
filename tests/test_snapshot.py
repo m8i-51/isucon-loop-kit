@@ -69,6 +69,24 @@ def test_run_snapshot_with_label(tmp_path: Path):
     assert remote_path == "/home/isucon/snapshots/snap-20260809-120000-pre-deploy.tar.gz"
 
 
+def test_run_snapshot_sanitizes_label(tmp_path: Path):
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+    with (
+        patch("isuctl.snapshot.run_ssh"),
+        patch("isuctl.snapshot.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-120000"
+        remote_path = run_snapshot(cfg_path, label="pre deploy; rm -rf")
+
+    expected = (
+        "/home/isucon/snapshots/snap-20260809-120000-pre-deploy-rm-rf.tar.gz"
+    )
+    assert remote_path == expected
+
+
 def test_run_snapshot_picks_first_app_host(tmp_path: Path):
     cfg_path = _write_config(
         tmp_path,
