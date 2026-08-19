@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from isuctl.config import Host, load_config
+from isuctl.hostsutil import primary_host
 from isuctl.paths import mark_ready
 from isuctl.remote import rsync_file_from_remote, rsync_from_remote, run_ssh
 
@@ -18,13 +19,6 @@ DEFAULT_EXCLUDES = [
     "venv",
     "tmp",
 ]
-
-
-def _primary_host(hosts: list[Host]) -> Host:
-    for host in hosts:
-        if "app" in host.role:
-            return host
-    return hosts[0]
 
 
 def _remote_exists(ssh, host: Host, remote_path: str) -> bool:
@@ -84,10 +78,7 @@ def _sync_optional_paths(ssh, host: Host, local_dir: Path) -> None:
 
 def run_sync_down(config_path: Path) -> Path:
     config = load_config(config_path)
-    if not config.hosts:
-        raise ValueError("config にホストが1つ以上必要です")
-
-    host = _primary_host(config.hosts)
+    host = primary_host(config.hosts)
     local_dir = (Path.cwd() / config.project.local_dir).resolve()
     local_dir.mkdir(parents=True, exist_ok=True)
 

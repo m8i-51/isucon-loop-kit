@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -115,6 +116,42 @@ def test_rollback_custom_git_ref(tmp_path: Path, monkeypatch):
         run_rollback(cfg_path, git_ref="abc1234")
 
     assert git_calls[0][-1] == "abc1234"
+
+
+def test_rollback_blocked_when_worktree_dirty(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+    local_dir = tmp_path / "work"
+    local_dir.mkdir()
+    mark_ready(local_dir)
+    subprocess.run(["git", "init"], cwd=local_dir, check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+        cwd=local_dir,
+        check=True,
+        capture_output=True,
+    )
+    (local_dir / "dirty.txt").write_text("nope\n", encoding="utf-8")
+
+    with (
+        patch("isuctl.rollback.run_deploy") as deploy_mock,
+        pytest.raises(DeployBlockedError, match="未コミット"),
+    ):
+        run_rollback(cfg_path)
+    deploy_mock.assert_not_called()
 
 
 def test_cli_rollback_command(tmp_path: Path, monkeypatch):

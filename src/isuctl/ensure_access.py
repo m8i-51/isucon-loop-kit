@@ -3,7 +3,7 @@ from __future__ import annotations
 import shlex
 from pathlib import Path
 
-from isuctl.config import Host, SshConfig, load_config, save_config
+from isuctl.config import SshConfig, load_config
 from isuctl.hostsutil import primary_host
 from isuctl.remote import run_ssh
 

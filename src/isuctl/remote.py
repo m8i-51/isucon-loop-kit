@@ -20,6 +20,8 @@ def ssh_base_args(ssh: SshConfig) -> list[str]:
         "StrictHostKeyChecking=accept-new",
         "-o",
         "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
     ]
 
 
@@ -36,7 +38,7 @@ def run_ssh(
         f"{ssh.user}@{host.host}",
         remote_command,
     ]
-    result = subprocess.run(cmd, text=True, capture_output=True)
+    result = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if check and result.returncode != 0:
         raise RemoteError(result.stderr.strip() or f"ssh failed: {cmd}")
     return result
@@ -50,19 +52,19 @@ def _rsync(
     *,
     delete: bool = False,
 ) -> None:
-    key = str(Path(ssh.key).expanduser())
+    ssh_cmd = "ssh " + " ".join(shlex.quote(part) for part in ssh_base_args(ssh))
     cmd = [
         "rsync",
         "-az",
         "-e",
-        f"ssh -i {shlex.quote(key)} -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
+        ssh_cmd,
     ]
     if delete:
         cmd.append("--delete")
     for ex in excludes or []:
         cmd.extend(["--exclude", ex])
     cmd.extend([source, dest])
-    result = subprocess.run(cmd, text=True, capture_output=True)
+    result = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         raise RemoteError(result.stderr.strip() or f"rsync failed: {cmd}")
 
