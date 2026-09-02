@@ -95,3 +95,12 @@ AMI なしで一通り回す（Cloud Agent / 手元 Docker）:
 | [matcher-http.service](assets/isucon14/matcher-http.service) | ISUCON14 CODE=32 回避例 |
 
 監視用 EC2 を競技 VPC に置かないこと。
+
+## ライセンス・商標
+
+MIT License（[LICENSE](LICENSE)）。
+
+本プロジェクトは ISUCON 運営・さくらインターネット株式会社とは無関係の非公式ツールです。
+
+「ISUCON」は、さくらインターネット株式会社の商標または登録商標です。  
+https://isucon.net
