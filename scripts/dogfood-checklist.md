@@ -36,11 +36,13 @@ isuctl bootstrap
 
 ## 4. ダミー編集 → deploy
 
-- [ ] `local_dir` 下を軽く変更（例: コメント追加）
-- [ ] `isuctl deploy` が成功（sync-down の ready マーカーが必要）
+- [ ] 変更を git に載せて、ansible の `repo_url` から見える branch / SHA にする（手元 rsync ではない）
+- [ ] `ansible/inventory/hosts.yml` がある
+- [ ] `isuctl deploy --branch <branch-or-sha>` が成功し、`isuctl check` も通る
 
 ```bash
-isuctl deploy
+isuctl deploy --branch <branch-or-sha>
+isuctl check
 ```
 
 ## 5. Bench → pull → analyze → pack

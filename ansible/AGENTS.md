@@ -1,10 +1,18 @@
 # AGENTS.md — ISUCON kit (AI contract)
 
-This directory is the **only** deploy/init/check interface for humans and AI agents.
-
-`isuctl deploy` is deprecated. Do not use it.
+Playbooks in this directory are the deploy/init/check implementation. Preferred entry for agents is `isuctl` (it shells out to these playbooks). Raw `ansible-playbook` remains allowed.
 
 ## Allowed commands
+
+From the kit root (a directory that contains `ansible/playbooks`):
+
+```bash
+isuctl deploy --branch <name-or-sha> [--limit s1,s2]
+isuctl check [--limit s1]
+isuctl provision [--limit s1,s2]
+```
+
+Equivalent raw form, run with cwd `ansible/` (this is what `isuctl` executes):
 
 ```bash
 ansible-playbook playbooks/init.yml
@@ -13,15 +21,18 @@ ansible-playbook playbooks/check.yml [--limit s1]
 ansible all -m ping
 ```
 
+`deploy` checks out `branch` from `repo_url`. It does not upload the laptop worktree. Push the ref first.
+
 Do not invent alternate deploy paths (no ad-hoc `scp`, no `rsync` of binaries, no one-off SSH loops) unless Koichi explicitly asks.
 
 ## Workflow for every change
 
-1. Change code in git; get a branch or SHA.
-2. `deploy.yml -e branch=...`
-3. `check.yml` and report unit / nginx / HTTP results.
+1. Change code in git and push a branch or SHA that `repo_url` can see.
+2. `isuctl deploy --branch ...` (or `deploy.yml -e branch=...`).
+3. `isuctl check` (or `check.yml`) and report unit / nginx / HTTP results.
 4. Only then enqueue or ask for a bench.
 5. Never redeploy an older known-bad snapshot “just to try”.
+   `isuctl rollback --ref <git-ref>` resets the local worktree, then deploys that SHA through the same playbook. The SHA still has to exist on `repo_url`.
 
 ## Hard bans (update each year from the official QA)
 

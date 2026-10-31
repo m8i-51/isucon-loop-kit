@@ -49,7 +49,7 @@
 ## AI への渡し方
 
 1. 変更は git の branch / SHA で渡す。
-2. デプロイは `ansible/playbooks/deploy.yml` だけ（`isuctl deploy` 禁止）。
+2. デプロイは `isuctl deploy --branch …`（中身は `ansible-playbook playbooks/deploy.yml -e branch=…`）。手元の rsync / scp は禁止。
 3. 直後に `check.yml` → warm ベンチ → 点と主要指標を報告。
 4. 仮説は **1つずつ**。同時に魔改造を重ねない。
 5. 禁止リストはこのファイル + 当年のレギュ追記。

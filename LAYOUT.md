@@ -2,8 +2,8 @@
 
 Single home for ISUCON tooling: **this repo**.
 
-- `isuctl` — laptop loop (discover → sync/pull/analyze/pack). Deploy is NOT here.
-- `ansible/` — **canonical** init / deploy / check (AI-safe API)
+- `isuctl` — laptop loop (discover → sync/pull/analyze/pack) and the thin wrapper for deploy / check / provision. Those three call `ansible-playbook`; they do not rsync the app tree.
+- `ansible/` — playbooks that wrapper runs (init / deploy / check). Contract: `ansible/AGENTS.md`.
 - `docs/dayof/` — contest-day notes
 - `~/isu_work-2026/` — 2026 contest scratch only (do not merge into kit)
 

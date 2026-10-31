@@ -4,6 +4,16 @@ Part of [isucon-loop-kit](../README.md). Contest servers are reached only throug
 
 ## Commands
 
+Preferred (from the kit root; these call the playbooks below):
+
+```bash
+isuctl provision
+isuctl deploy --branch main
+isuctl check
+```
+
+Raw form (`isuctl` runs this with cwd `ansible/`):
+
 ```bash
 cd "$(git rev-parse --show-toplevel)/ansible"
 ansible-playbook playbooks/init.yml

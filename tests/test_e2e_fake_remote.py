@@ -10,9 +10,9 @@ import pytest
 
 from isuctl.analyze import run_analyze
 from isuctl.config import Host, IsuconConfig, ProjectConfig, SshConfig, save_config
-from isuctl.deploy import DeployBlockedError, run_deploy
+from isuctl.deploy import run_deploy
 from isuctl.pack import run_pack
-from isuctl.paths import is_ready, mark_ready
+from isuctl.paths import is_ready
 from isuctl.sync_down import run_sync_down
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -52,7 +52,9 @@ def _make_local_remote(remote_home: Path):
         local_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, local_file)
 
-    def local_rsync_to_remote(ssh, host, local_path, remote_path, *, excludes=None, delete=False):
+    def local_rsync_to_remote(
+        ssh, host, local_path, remote_path, *, excludes=None, delete=False
+    ):
         dst = _map_remote(remote_home, remote_path.rstrip("/"))
         _copy_tree(local_path, dst, excludes=excludes)
 
@@ -62,10 +64,17 @@ def _make_local_remote(remote_home: Path):
             remote_file = shlex.split(quoted)[0]
             path = _map_remote(remote_home, remote_file)
             code = 0 if path.exists() else 1
-            return subprocess.CompletedProcess(args=[], returncode=code, stdout="", stderr="")
+            return subprocess.CompletedProcess(
+                args=[], returncode=code, stdout="", stderr=""
+            )
         return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
 
-    return local_run_ssh, local_rsync_from_remote, local_rsync_file_from_remote, local_rsync_to_remote
+    return (
+        local_run_ssh,
+        local_rsync_from_remote,
+        local_rsync_file_from_remote,
+        local_rsync_to_remote,
+    )
 
 
 def _write_config(tmp_path: Path) -> Path:
@@ -102,13 +111,12 @@ def e2e_workspace(tmp_path: Path, monkeypatch):
     remote_home = tmp_path / "remote_home"
     shutil.copytree(FAKE_REMOTE_SRC, remote_home)
     cfg_path = _write_config(tmp_path)
-    ssh, rsync_from, rsync_file_from, rsync_to = _make_local_remote(remote_home)
+    ssh, rsync_from, rsync_file_from, _rsync_to = _make_local_remote(remote_home)
     patches = [
         patch("isuctl.sync_down.run_ssh", side_effect=ssh),
         patch("isuctl.sync_down.rsync_from_remote", side_effect=rsync_from),
         patch("isuctl.sync_down.rsync_file_from_remote", side_effect=rsync_file_from),
-        patch("isuctl.deploy.run_ssh", side_effect=ssh),
-        patch("isuctl.deploy.rsync_to_remote", side_effect=rsync_to),
+        patch("isuctl.deploy.run_playbook"),
     ]
     for p in patches:
         p.start()
@@ -127,16 +135,13 @@ def test_e2e_fake_remote_core_loop(e2e_workspace):
     assert (local_dir / "sql" / "schema.sql").is_file()
     assert "/api/foo" in (local_dir / "app.py").read_text(encoding="utf-8")
 
-    with pytest.raises(DeployBlockedError):
-        (local_dir / ".isucon-ready").unlink()
-        run_deploy(cfg_path)
-
-    mark_ready(local_dir)
-    run_deploy(cfg_path)
-
-    deployed_remote = remote_home / "webapp"
-    assert (deployed_remote / "app.py").is_file()
-    assert not (deployed_remote / ".isucon-ready").exists()
+    remote_app = (remote_home / "webapp" / "app.py").read_text(encoding="utf-8")
+    with patch("isuctl.deploy.run_playbook") as play:
+        run_deploy(cfg_path, branch="main")
+    play.assert_called_once_with(
+        "deploy.yml", extra_vars={"branch": "main"}, limit=None
+    )
+    assert (remote_home / "webapp" / "app.py").read_text(encoding="utf-8") == remote_app
 
     raw_dir = _seed_raw_logs(tmp_path)
     with patch("isuctl.analyze.shutil.which", return_value=None):
