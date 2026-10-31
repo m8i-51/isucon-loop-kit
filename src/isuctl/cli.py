@@ -21,7 +21,7 @@ from isuctl.config import (
     default_config_path,
     save_config,
 )
-from isuctl.deploy import DeployBlockedError, run_deploy
+from isuctl.deploy import DeployBlockedError, run_check, run_deploy, run_provision
 from isuctl.discover import run_discover
 from isuctl.ensure_access import run_ensure_access
 from isuctl.pack import run_pack
@@ -54,7 +54,7 @@ def main(
         False, "--version", callback=_version_callback, is_eager=True
     ),
 ) -> None:
-    """ISUCON 計測→改善ループ用キット。"""
+    """ISUCON 計測→改善ループ用キット。デプロイは ansible（isuctl deploy/check/provision）。"""
 
 
 @app.command("init-config")
@@ -101,7 +101,9 @@ def discover(
     cfg = _cli_call(run_discover, config)
     for h in cfg.hosts:
         roles = ", ".join(h.role) or "(なし)"
-        typer.echo(f"{h.name} ({h.host}): roles=[{roles}] remote_app_dir={h.remote_app_dir}")
+        typer.echo(
+            f"{h.name} ({h.host}): roles=[{roles}] remote_app_dir={h.remote_app_dir}"
+        )
     typer.echo(f"更新しました: {config}")
 
 
@@ -118,22 +120,41 @@ def sync_down(
 
 @app.command("deploy")
 def deploy(
-    config: Path = typer.Option(
-        default_config_path(), "--config", "-c", help="isucon.toml のパス"
+    branch: str = typer.Option(
+        ..., "--branch", "-b", help="デプロイする git branch / SHA"
     ),
-    force: bool = typer.Option(
-        False, "--force", help="ready マーカーなしでもデプロイする"
+    limit: str | None = typer.Option(
+        None, "--limit", help="Ansible --limit (例: s1,s2)"
+    ),
+    config: Path = typer.Option(
+        default_config_path(),
+        "--config",
+        "-c",
+        help="isucon.toml のパス（互換・未使用）",
     ),
 ) -> None:
-    """[非推奨] rsync デプロイ。正は ansible/playbooks/deploy.yml。"""
-    typer.secho(
-        "warning: isuctl deploy は非推奨。正は: "
-        "ansible-playbook ansible/playbooks/deploy.yml -e branch=<name>",
-        fg=typer.colors.YELLOW,
-        err=True,
-    )
-    _cli_call(run_deploy, config, force=force)
-    typer.echo("デプロイ完了")
+    """ansible/playbooks/deploy.yml でデプロイする（AI・人間の正）。"""
+    del config
+    _cli_call(run_deploy, None, branch=branch, limit=limit)
+    typer.echo(f"デプロイ完了 branch={branch}")
+
+
+@app.command("check")
+def check(
+    limit: str | None = typer.Option(None, "--limit", help="Ansible --limit"),
+) -> None:
+    """ansible/playbooks/check.yml でヘルスチェックする。"""
+    _cli_call(run_check, limit=limit)
+    typer.echo("check 完了")
+
+
+@app.command("provision")
+def provision(
+    limit: str | None = typer.Option(None, "--limit", help="Ansible --limit"),
+) -> None:
+    """ansible/playbooks/init.yml で初動セットアップする。"""
+    _cli_call(run_provision, limit=limit)
+    typer.echo("provision 完了")
 
 
 @app.command("rollback")
@@ -142,12 +163,11 @@ def rollback(
         default_config_path(), "--config", "-c", help="isucon.toml のパス"
     ),
     git_ref: str = typer.Option("HEAD~1", "--ref", help="戻す git ref"),
-    force: bool = typer.Option(
-        False, "--force", help="ready マーカーなしでもロールバックする"
-    ),
+    limit: str | None = typer.Option(None, "--limit", help="Ansible --limit"),
+    force: bool = typer.Option(False, "--force", help="ready / dirty ガードを無視する"),
 ) -> None:
-    """指定 ref に戻して再デプロイする（git reset --hard）。"""
-    _cli_call(run_rollback, config, git_ref=git_ref, force=force)
+    """work/ を git reset したあと、その SHA を ansible deploy する。"""
+    _cli_call(run_rollback, config, git_ref=git_ref, force=force, limit=limit)
     typer.echo(f"{git_ref} へロールバックしてデプロイしました")
 
 
@@ -167,7 +187,9 @@ def snapshot(
     config: Path = typer.Option(
         default_config_path(), "--config", "-c", help="isucon.toml のパス"
     ),
-    label: str | None = typer.Option(None, "--label", "-l", help="任意のスナップショット名"),
+    label: str | None = typer.Option(
+        None, "--label", "-l", help="任意のスナップショット名"
+    ),
 ) -> None:
     """リモートに復元ポイントを作る。"""
     remote_path = _cli_call(run_snapshot, config, label=label)
@@ -202,7 +224,9 @@ def pack(
         default_config_path(), "--config", "-c", help="isucon.toml のパス"
     ),
     analyze_dir: Path | None = typer.Option(
-        None, "--analyze-dir", help="解析結果ディレクトリ（省略時は最新の out/analyze/*）"
+        None,
+        "--analyze-dir",
+        help="解析結果ディレクトリ（省略時は最新の out/analyze/*）",
     ),
 ) -> None:
     """Cursor 用の分析パックを作る。"""

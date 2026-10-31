@@ -130,7 +130,7 @@ isuctl snapshot        # リモートに復元ポイント
 isuctl bootstrap       # nginx LTSV / MySQL slow(0.2s) / alp / pt-query-digest
 ```
 - 確認: `ssh isucon 'sudo nginx -t; ls -la /var/log/nginx/access.ltsv.log /var/log/mysql/mysql-slow.log'`
-- 言語切替するならここで（マニュアルの方法で）。`isuctl deploy` は既定で `isucon-python.service` → `isuride-*`/`isucon-*` の順で restart するので、使う言語の unit 名を確認しとく。
+- 言語切替するならここで（マニュアルの方法で）。再起動する unit は ansible `group_vars` の `unit_name`（既定 `isucon-app.service`）。`isuctl deploy` は playbook に任せる。
 - DB が MySQL じゃない（Postgres 等）なら slow は効かない → AI に pg_stat_statements 等を相談
 
 ### 10:27 計測ベンチ
@@ -148,12 +148,12 @@ open out/pack.md
 - isucon Project（or Air の Cursor）に `out/pack.md` と `work/` を渡して「**仮説 1 つだけ**」選ばせる
 - ループ:
   ```bash
-  # AI がパッチ → work/ でコミット
-  isuctl deploy
+  # AI がパッチ → work/ でコミットして remote へ push
+  isuctl deploy --branch <branch-or-sha> && isuctl check
   ssh isucon 'sudo truncate -s 0 /var/log/nginx/access.ltsv.log /var/log/mysql/mysql-slow.log'
   # ポータルでベンチ
   isuctl pull && isuctl analyze && isuctl pack
-  isuctl bench-note --note "<何を変えたか>"     # 下がったら → isuctl rollback
+  isuctl bench-note --note "<何を変えたか>"     # 下がったら → isuctl rollback --ref HEAD~1
   ```
 
 ---

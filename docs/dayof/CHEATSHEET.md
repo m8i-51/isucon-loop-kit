@@ -26,12 +26,12 @@ isuctl bench-note <SCORE> --note "初期実装"
 isuctl discover && isuctl sync-down && isuctl snapshot && isuctl bootstrap
 
 # --- 1 ループ ---
-isuctl deploy
+isuctl deploy --branch <branch-or-sha> && isuctl check              # 中身は ansible。ref は remote に載せてから
 ssh isucon 'sudo truncate -s 0 /var/log/nginx/access.ltsv.log /var/log/mysql/mysql-slow.log'
 #   ↓ ポータルでベンチ
 isuctl pull && isuctl analyze && isuctl pack && open out/pack.md
 isuctl bench-note <SCORE> --note "<変更内容>"
-isuctl rollback                                                     # 下がった時（HEAD~1）
+isuctl rollback --ref HEAD~1                                        # 下がった時。手元 reset → その SHA を deploy
 
 # --- 終盤 ---
 ssh isucon 'sudo reboot'          # 16:30 再起動試験 → ベンチ → データ残ってるか
