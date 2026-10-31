@@ -54,3 +54,7 @@ After deploy/check, report in one short block:
 - which hosts
 - check results (unit, nginx -t, HTTP)
 - next action you want (bench / stop / fix)
+
+## Lessons
+
+Reusable bans and habits: [`docs/lessons-2026.md`](../docs/lessons-2026.md). Update that file when a new Clar or FAIL teaches something lasting.

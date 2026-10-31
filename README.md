@@ -128,3 +128,7 @@ ansible-playbook playbooks/check.yml
 ```
 
 契約は `ansible/AGENTS.md`。
+
+## 2026 からの教訓
+
+問題固有のログは `~/isu_work-2026/`。来年用に蒸留したのは [docs/lessons-2026.md](./docs/lessons-2026.md)。
