@@ -104,3 +104,27 @@ MIT License（[LICENSE](LICENSE)）。
 
 「ISUCON」は、さくらインターネット株式会社の商標または登録商標です。  
 https://isucon.net
+
+## 置き場（これが唯一のキット）
+
+| パス | 役割 |
+| --- | --- |
+| このリポジトリ (`isucon-loop-kit`) | 本体。`isuctl`・AI ループ・Ansible |
+| `ansible/` | init / deploy / check。AI へのデプロイ API |
+| `docs/dayof/` | 当日メモ・チートシート・ssh_config |
+| `~/isu_work-2026/` | ISUCON2026 本番スクラッチ（アーカイブ。キットに混ぜない） |
+
+昔バラバラだった `~/isucon-kit` と `Projects/isucon-dayof` はここへ吸収済み。新しい道具は **このリポの中** にだけ足す。
+
+## Ansible（来年向け）
+
+`isuctl deploy` と併用・移行用。AI には基本これを叩かせる。
+
+```bash
+cd ansible
+ansible-playbook playbooks/init.yml
+ansible-playbook playbooks/deploy.yml -e branch=<name>
+ansible-playbook playbooks/check.yml
+```
+
+契約は `ansible/AGENTS.md`。

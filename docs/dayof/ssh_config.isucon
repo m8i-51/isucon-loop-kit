@@ -1,0 +1,36 @@
+# ~/.ssh/config に追記する用（ISUCON2026 当日）
+# 当日 IP が出たら HostName を書き換える。複数台なら isucon2 / isucon3 も。
+Host isucon isucon1
+  HostName REPLACE_WITH_IP_1
+  User isucon
+  IdentityFile ~/.ssh/moriko_pri
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
+  ServerAliveInterval 30
+  ServerAliveCountMax 6
+  # 練習機みたいにログインシェルがチェック後に exit する場合用:
+  # RequestTTY yes
+  # RemoteCommand bash --noprofile --norc
+
+Host isucon2
+  HostName REPLACE_WITH_IP_2
+  User isucon
+  IdentityFile ~/.ssh/moriko_pri
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
+  ServerAliveInterval 30
+
+Host isucon3
+  HostName REPLACE_WITH_IP_3
+  User isucon
+  IdentityFile ~/.ssh/moriko_pri
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
+  ServerAliveInterval 30
+
+# AMI 初期ユーザー（ensure-access が必要な場合だけ）
+Host isucon-ubuntu
+  HostName REPLACE_WITH_IP_1
+  User ubuntu
+  IdentityFile ~/.ssh/moriko_pri
+  IdentitiesOnly yes

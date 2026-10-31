@@ -1,0 +1,18 @@
+# Contest-day knobs. Keep small so AI prompts stay short.
+app_name: isucon-app
+unit_name: "{{ app_name }}.service"
+repo_url: "git@github.com:EXAMPLE/isucon.git"
+repo_dir: "/home/{{ ansible_user }}/{{ app_name }}"
+deploy_branch: main
+git_remote: origin
+
+# Tools installed by init (edit list freely; keep idempotent)
+init_packages:
+  - git
+  - curl
+  - jq
+  - htop
+  - unzip
+
+# Optional Go tooling paths after init
+go_bin: "/home/{{ ansible_user }}/go/bin"

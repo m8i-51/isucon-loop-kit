@@ -1,0 +1,7 @@
+# Contest-day secrets / real IPs — keep examples in git
+inventory/hosts.yml
+inventory/host_vars/s1.yml
+inventory/host_vars/s2.yml
+inventory/host_vars/s3.yml
+*.retry
+.vault_pass

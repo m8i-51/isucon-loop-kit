@@ -1,0 +1,44 @@
+---
+# Post-deploy / readiness checks. AI must run this after deploy and report results.
+# Usage:
+#   ansible-playbook playbooks/check.yml [--limit s1]
+- name: ISUCON check
+  hosts: all
+  become: false
+  gather_facts: false
+  tasks:
+    - name: App unit status
+      become: true
+      ansible.builtin.command: systemctl is-active "{{ unit_name }}"
+      register: unit_active
+      changed_when: false
+      failed_when: false
+
+    - name: Nginx config test
+      become: true
+      ansible.builtin.command: nginx -t
+      register: nginx_test
+      changed_when: false
+      failed_when: false
+
+    - name: Local HTTP probe
+      ansible.builtin.uri:
+        url: "http://127.0.0.1/"
+        status_code: [200, 302, 301, 404]
+        timeout: 3
+      register: http_probe
+      failed_when: false
+
+    - name: Disk free (human)
+      ansible.builtin.command: df -h /
+      register: disk
+      changed_when: false
+
+    - name: Check report
+      ansible.builtin.debug:
+        msg:
+          - "host={{ inventory_hostname }}"
+          - "unit={{ unit_name }} active={{ unit_active.stdout | default('n/a') }} rc={{ unit_active.rc }}"
+          - "nginx_t rc={{ nginx_test.rc | default('n/a') }}"
+          - "http=/ status={{ http_probe.status | default('n/a') }}"
+          - "{{ disk.stdout_lines | first | default('df n/a') }}"

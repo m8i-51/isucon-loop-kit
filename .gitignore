@@ -10,3 +10,9 @@ out/
 *.pem
 isucon.toml
 env.sh
+
+# ansible contest-day inventory (examples stay tracked)
+ansible/inventory/hosts.yml
+ansible/inventory/host_vars/s1.yml
+ansible/inventory/host_vars/s2.yml
+ansible/inventory/host_vars/s3.yml

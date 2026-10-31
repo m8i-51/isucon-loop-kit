@@ -1,0 +1,72 @@
+---
+# Deploy API for humans and AI.
+# Usage:
+#   ansible-playbook playbooks/deploy.yml -e branch=feat/x [--limit s1,s2]
+- name: ISUCON deploy
+  hosts: all
+  become: false
+  gather_facts: false
+  vars:
+    branch: "{{ deploy_branch }}"
+  tasks:
+    - name: Require branch
+      ansible.builtin.assert:
+        that:
+          - branch is defined
+          - branch | length > 0
+        fail_msg: "Pass -e branch=<name>"
+
+    - name: Fetch and checkout branch
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_dir }}"
+        version: "{{ branch }}"
+        force: true
+        update: true
+        accept_hostkey: true
+
+    - name: Record HEAD
+      ansible.builtin.command:
+        cmd: git rev-parse --short HEAD
+        chdir: "{{ repo_dir }}"
+      register: head_sha
+      changed_when: false
+
+    - name: Build application (override this task per contest)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if [ -f Makefile ]; then
+          make build || make || true
+        elif [ -d go ] || [ -f go.mod ]; then
+          go build -o "{{ app_name }}" .
+        else
+          echo "No build step configured; skip"
+        fi
+      args:
+        chdir: "{{ repo_dir }}"
+      register: build_out
+      changed_when: true
+
+    - name: Restart app unit if present
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ unit_name }}"
+        state: restarted
+        daemon_reload: true
+      register: restart_app
+      failed_when: false
+
+    - name: Reload nginx if present
+      become: true
+      ansible.builtin.shell: |
+        if command -v nginx >/dev/null 2>&1; then
+          nginx -t && systemctl reload nginx
+        else
+          echo "nginx not installed; skip"
+        fi
+      register: nginx_reload
+      changed_when: "'skip' not in nginx_reload.stdout"
+
+    - name: Deploy summary
+      ansible.builtin.debug:
+        msg: "host={{ inventory_hostname }} branch={{ branch }} sha={{ head_sha.stdout }} app_restart={{ restart_app.changed | default(false) }}"

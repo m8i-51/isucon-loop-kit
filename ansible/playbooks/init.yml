@@ -1,0 +1,43 @@
+---
+# First-hour bootstrap. Safe to re-run. Do not put contest-specific hacks here.
+- name: ISUCON init
+  hosts: all
+  become: false
+  gather_facts: true
+  tasks:
+    - name: Ensure base packages
+      become: true
+      ansible.builtin.apt:
+        name: "{{ init_packages }}"
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure repo parent exists
+      ansible.builtin.file:
+        path: "{{ repo_dir | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Clone application repository
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_dir }}"
+        version: "{{ deploy_branch }}"
+        accept_hostkey: true
+        update: true
+      register: git_clone
+      failed_when: false
+      # failed_when false so dry-run / missing key during local syntax practice does not brick the kit
+      # On contest day, remove failed_when or fix SSH key first.
+
+    - name: Note clone result
+      ansible.builtin.debug:
+        msg: "git clone/update → {{ git_clone.msg | default(git_clone) }}"
+
+    - name: Ensure ~/.local/bin on PATH in bashrc
+      ansible.builtin.lineinfile:
+        path: "/home/{{ ansible_user }}/.bashrc"
+        line: 'export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"'
+        create: true
+        state: present

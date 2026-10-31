@@ -1,0 +1,11 @@
+all:
+  children:
+    app:
+      hosts:
+        s1:
+        s2:
+    db:
+      hosts:
+        s3:
+  vars:
+    ansible_user: isucon
