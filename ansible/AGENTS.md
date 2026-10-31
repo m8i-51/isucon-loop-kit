@@ -1,6 +1,8 @@
 # AGENTS.md — ISUCON kit (AI contract)
 
-This repo is the **only** deploy/init/check interface for humans and AI agents.
+This directory is the **only** deploy/init/check interface for humans and AI agents.
+
+`isuctl deploy` is deprecated. Do not use it.
 
 ## Allowed commands
 

@@ -5,7 +5,7 @@
 手元（laptop）から SSH / rsync で競技 EC2 を操作する薄い CLI です。競技サーバ上では動かしません。
 
 ```text
-discover → sync-down → 編集 → deploy → bench → pull → analyze → pack → bench-note
+discover → sync-down → 編集 → ansible deploy → check → bench → pull → analyze → pack → bench-note
 ```
 
 主成果物は `out/pack.md`。Cursor / Claude Code など生成AIが読んで次の一手を出す想定で、自作ダッシュボードは作りません。人が深く掘るときは `out/analyze/*` か laptop の [pprotein](assets/pprotein/README.md)。
@@ -14,7 +14,7 @@ discover → sync-down → 編集 → deploy → bench → pull → analyze → 
 
 | 役割 | やること |
 | --- | --- |
-| あなた | EC2・ベンチ・`bench-note`・deploy / rollback の判断 |
+| あなた | EC2・ベンチ・`bench-note`・ansible deploy / 切り戻し判断 |
 | 生成AI | `out/pack.md`（必要なら `out/analyze/*`）と `work/` を読んで、仮説 **1 つ**だけ直す |
 
 **最初の30分**
@@ -27,10 +27,10 @@ discover → sync-down → 編集 → deploy → bench → pull → analyze → 
 
 **改善ループ**
 
-1. AI がパッチ → コミット → `deploy`
+1. AI がパッチ → コミット → `ansible-playbook ansible/playbooks/deploy.yml -e branch=…` → `check.yml`
 2. EC2 でベンチ
 3. `pull` → `analyze` → `pack` → また AI へ
-4. `bench-note` … 上がれば残す / 下がれば `rollback`
+4. `bench-note` … 上がれば残す / 下がれば git ref + 再 deploy（`isuctl rollback` はレガシー）
 
 計測なしの全面書き換えは後回し。終盤に再起動耐性を見る。
 
@@ -62,8 +62,9 @@ isuctl ensure-access        # 必要な AMI のみ（ubuntu → isucon）
 isuctl discover && isuctl sync-down
 isuctl snapshot && isuctl bootstrap
 
-# 改善ループ
-isuctl deploy               # work/ を編集・コミットしたあと（isuride-* / isucon-* を順に再起動）
+# 改善ループ（デプロイの正は Ansible）
+ansible-playbook ansible/playbooks/deploy.yml -e branch=main
+ansible-playbook ansible/playbooks/check.yml
 # EC2 上でベンチを実行（isuctl は起動しない）
 isuctl pull && isuctl analyze && isuctl pack
 isuctl bench-note           # スコア報告（対話。引数でも可）
@@ -71,7 +72,9 @@ isuctl bench-note           # スコア報告（対話。引数でも可）
 
 既定ユーザーは `isucon`（`bootstrap_user=ubuntu`）。
 
-**`bench-note`:** 前回・最高との差分を出し、前回より低いときは記録前に確認します（`--yes` で省略可）。戻すなら `isuctl rollback`。
+**デプロイ:** `ansible/` が正。`isuctl deploy` / `isuctl rollback` はレガシー（警告付きで残存）。
+
+**`bench-note`:** 前回・最高との差分を出し、前回より低いときは記録前に確認します（`--yes` で省略可）。
 
 ## Docker ドックフーディング
 
@@ -109,25 +112,25 @@ https://isucon.net
 
 | パス | 役割 |
 | --- | --- |
-| このリポジトリ (`isucon-loop-kit`) | 本体。`isuctl`・AI ループ・Ansible |
-| `ansible/` | init / deploy / check。AI へのデプロイ API |
+| このリポジトリ (`isucon-loop-kit`) | 本体。計測ループは `isuctl`、デプロイは `ansible/` |
+| `ansible/` | **デプロイの正**（init / deploy / check） |
 | `docs/dayof/` | 当日メモ・チートシート・ssh_config |
 | `~/isu_work-2026/` | ISUCON2026 本番スクラッチ（アーカイブ。キットに混ぜない） |
 
 昔バラバラだった `~/isucon-kit` と `Projects/isucon-dayof` はここへ吸収済み。新しい道具は **このリポの中** にだけ足す。
 
-## Ansible（来年向け）
+## デプロイ（Ansible が正）
 
-`isuctl deploy` と併用・移行用。AI には基本これを叩かせる。
+AI・人間ともデプロイ口はここだけ。契約は [`ansible/AGENTS.md`](./ansible/AGENTS.md)。
 
 ```bash
-cd ansible
+cd ansible   # or: ansible-playbook ansible/playbooks/...
 ansible-playbook playbooks/init.yml
 ansible-playbook playbooks/deploy.yml -e branch=<name>
 ansible-playbook playbooks/check.yml
 ```
 
-契約は `ansible/AGENTS.md`。
+`isuctl` は discover / sync-down / pull / analyze / pack / bench-note 用。`isuctl deploy` は非推奨。
 
 ## 2026 からの教訓
 

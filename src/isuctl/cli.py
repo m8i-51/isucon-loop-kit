@@ -125,7 +125,13 @@ def deploy(
         False, "--force", help="ready マーカーなしでもデプロイする"
     ),
 ) -> None:
-    """手元の変更をリモートへ rsync デプロイする。"""
+    """[非推奨] rsync デプロイ。正は ansible/playbooks/deploy.yml。"""
+    typer.secho(
+        "warning: isuctl deploy は非推奨。正は: "
+        "ansible-playbook ansible/playbooks/deploy.yml -e branch=<name>",
+        fg=typer.colors.YELLOW,
+        err=True,
+    )
     _cli_call(run_deploy, config, force=force)
     typer.echo("デプロイ完了")
 

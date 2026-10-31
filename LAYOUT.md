@@ -2,8 +2,8 @@
 
 Single home for ISUCON tooling: **this repo**.
 
-- `isuctl` — laptop loop (discover → deploy → pack)
-- `ansible/` — init / deploy / check playbooks (AI-safe API)
+- `isuctl` — laptop loop (discover → sync/pull/analyze/pack). Deploy is NOT here.
+- `ansible/` — **canonical** init / deploy / check (AI-safe API)
 - `docs/dayof/` — contest-day notes
 - `~/isu_work-2026/` — 2026 contest scratch only (do not merge into kit)
 
