@@ -50,7 +50,9 @@ def test_run_snapshot_creates_remote_tarball(tmp_path: Path):
     assert "tar" in cmd
     assert "/home/isucon/snapshots" in cmd
     assert "home/isucon/webapp" in cmd
-    assert "/etc/nginx" in cmd
+    assert 'if [ -r /etc/nginx ]; then set -- "$@" etc/nginx; fi' in cmd
+    assert 'if [ -r /etc/apache2 ]; then set -- "$@" etc/apache2; fi' in cmd
+    assert 'if [ -r /etc/httpd ]; then set -- "$@" etc/httpd; fi' in cmd
 
 
 def test_run_snapshot_with_label(tmp_path: Path):

@@ -40,7 +40,7 @@ discover → sync-down → 編集 → isuctl deploy → isuctl check → bench �
 - `ssh` / `rsync`（discover / sync-down / pull 用）
 - `ansible-playbook`（`isuctl deploy` / `check` / `provision` が呼ぶ）
 - 競技 EC2 用の SSH 鍵
-- （任意）laptop 側の `alp` / `pt-query-digest` — `analyze` は手元で動く。無くてもフォールバックする
+- （任意）laptop 側の `alp` / `pt-query-digest` — `analyze` は手元で動く。無くてもフォールバックする。PostgreSQL の slow ログも `alp` / `pt-query-digest` と同じ前提で、手元にツールが無ければ duration 行の集計へフォールバックする。
 
 ## セットアップ
 

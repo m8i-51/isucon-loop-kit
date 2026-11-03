@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
@@ -21,6 +22,21 @@ QUERY_TIME_RE = re.compile(r"Query_time:\s*([0-9.]+)")
 SQL_START_RE = re.compile(
     r"^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE)\b",
     re.IGNORECASE,
+)
+SLOW_LOG_NAMES = ("mysql-slow.log", "slow.log")
+PG_DURATION_RE = re.compile(
+    r"duration:\s*([0-9.]+)\s*ms\s+"
+    r"(?:statement|execute|parse|bind)(?:\s+<[^>]*>)?:\s*(.*)$",
+    re.IGNORECASE,
+)
+POSTGRES_SLOW_MARKER = "# PostgreSQL slow log"
+_SLOW_SNIFF_LINES = 20_000
+_MYSQL_FALLBACK_NOTE = (
+    "- pt-query-digest が使えないため、`slow.txt` の抜粋を参照してください。"
+)
+_MYSQL_DIGEST_NOTE = "- pt-query-digest 出力は `slow.txt` を参照してください。"
+_POSTGRES_NOTE = (
+    "- PostgreSQL の slow ログを duration 順に集計しました。`slow.txt` を参照してください。"
 )
 
 
@@ -328,25 +344,130 @@ def _fallback_slow_summary(slow_log: Path) -> str:
     return "\n".join(lines)
 
 
-def _analyze_slow(slow_log: Path) -> str:
+def _is_postgres_slow(slow_log: Path) -> bool:
+    """True when the file looks like PostgreSQL rather than a MySQL slow log."""
+    with slow_log.open("r", encoding="utf-8", errors="ignore") as handle:
+        for index, line in enumerate(handle):
+            if "Query_time:" in line:
+                return False
+            if index == 0 and "mysqld" in line and "Version" in line:
+                return False
+            if PG_DURATION_RE.search(line):
+                return True
+            if index >= _SLOW_SNIFF_LINES:
+                break
+    return False
+
+
+def _fallback_postgres_summary(slow_log: Path) -> str:
+    """Rank log_min_duration_statement lines when no local PostgreSQL tool exists."""
+    totals: dict[str, list[float]] = defaultdict(list)
+    for raw in slow_log.read_text(encoding="utf-8", errors="ignore").splitlines():
+        match = PG_DURATION_RE.search(raw.strip())
+        if match is None:
+            continue
+        try:
+            duration_ms = float(match.group(1))
+        except ValueError:
+            continue
+        sql = " ".join(match.group(2).split()).strip().rstrip(";")
+        if not sql or _is_bulk_insert(sql):
+            continue
+        if len(sql) > SLOW_SQL_DISPLAY_CHARS:
+            sql = sql[: SLOW_SQL_DISPLAY_CHARS - 3] + "..."
+        totals[sql].append(duration_ms)
+
+    if not totals:
+        lines = slow_log.read_text(encoding="utf-8", errors="ignore").splitlines()
+        excerpt = "\n".join(lines[:SLOW_FALLBACK_LINES])
+        return (
+            f"{POSTGRES_SLOW_MARKER}。duration 行を抽出できませんでした。"
+            f"先頭 {SLOW_FALLBACK_LINES} 行を表示します\n\n{excerpt}\n"
+        )
+
+    ranked = sorted(
+        totals.items(),
+        key=lambda item: (-sum(item[1]), -len(item[1]), item[0]),
+    )
+    lines = [
+        f"{POSTGRES_SLOW_MARKER}。duration 合計順（log_min_duration_statement）",
+        "# 手元ツールなし。行単位で集計しました",
+        "",
+    ]
+    shown = ranked[:SLOW_FALLBACK_TOP_N]
+    for rank, (sql, samples) in enumerate(shown, start=1):
+        total_ms = sum(samples)
+        mean_ms = total_ms / len(samples)
+        lines.append(
+            f"{rank}. calls={len(samples)} total_ms={total_ms:.3f} mean_ms={mean_ms:.3f}"
+        )
+        lines.append(sql.rstrip(";") + ";")
+        lines.append("")
+    if len(ranked) > SLOW_FALLBACK_TOP_N:
+        lines.append(f"_上位 {SLOW_FALLBACK_TOP_N} / 全 {len(ranked)} クエリを表示_")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _run_pgbadger(slow_log: Path) -> str | None:
+    if shutil.which("pgbadger") is None:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        result = subprocess.run(
+            ["pgbadger", "--quiet", "--outfile", "-", str(slow_log)],
+            text=True,
+            capture_output=True,
+            check=False,
+            cwd=tmp,
+        )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout
+
+
+def _analyze_postgres(slow_log: Path) -> str:
+    report = _run_pgbadger(slow_log)
+    if report is not None:
+        body = f"{POSTGRES_SLOW_MARKER}（pgbadger）\n\n{report.strip()}\n"
+        return _truncate_slow_output(body)
+    return _truncate_slow_output(_fallback_postgres_summary(slow_log))
+
+
+def _analyze_slow(slow_log: Path) -> tuple[str, str]:
+    if _is_postgres_slow(slow_log):
+        return _analyze_postgres(slow_log), "postgres"
     digest = _run_pt_query_digest(slow_log)
     if digest is not None:
-        return _truncate_slow_output(digest)
-    return _truncate_slow_output(_fallback_slow_summary(slow_log))
+        return _truncate_slow_output(digest), "mysql-digest"
+    return _truncate_slow_output(_fallback_slow_summary(slow_log)), "mysql-fallback"
+
+
+def _slow_query_notes(slow_kinds: list[str]) -> list[str]:
+    if not slow_kinds:
+        return [_MYSQL_DIGEST_NOTE]
+    notes: list[str] = []
+    if "mysql-fallback" in slow_kinds:
+        notes.append(_MYSQL_FALLBACK_NOTE)
+    if "mysql-digest" in slow_kinds:
+        notes.append(_MYSQL_DIGEST_NOTE)
+    if "postgres" in slow_kinds:
+        notes.append(_POSTGRES_NOTE)
+    return notes
 
 
 def _write_summary(
     alp_data: list[dict[str, float | int | str]],
-    slow_txt: str,
     *,
     access_log: Path | None,
-    slow_log: Path | None,
+    slow_logs: list[Path],
+    slow_kinds: list[str],
 ) -> str:
     lines = ["# 解析サマリ", ""]
     if access_log is not None:
         lines.append(f"- アクセスログ: `{access_log.name}`")
-    if slow_log is not None:
-        lines.append(f"- slow ログ: `{slow_log.name}`")
+    if slow_logs:
+        names = ", ".join(f"`{path.name}`" for path in slow_logs)
+        lines.append(f"- slow ログ: {names}")
     lines.append("")
     lines.append("## 遅いエンドポイント（request_time 合計）")
     lines.append("")
@@ -363,12 +484,18 @@ def _write_summary(
     lines.append("")
     lines.append("## Slow Query メモ")
     lines.append("")
-    if "pt-query-digest なし" in slow_txt:
-        lines.append("- pt-query-digest が使えないため、`slow.txt` の抜粋を参照してください。")
-    else:
-        lines.append("- pt-query-digest 出力は `slow.txt` を参照してください。")
+    lines.extend(_slow_query_notes(slow_kinds))
     lines.append("")
     return "\n".join(lines)
+
+
+def _present_slow_logs(source_dir: Path) -> list[Path]:
+    found: list[Path] = []
+    for name in SLOW_LOG_NAMES:
+        path = source_dir / name
+        if _has_log_content(path):
+            found.append(path)
+    return found
 
 
 def _has_log_content(path: Path) -> bool:
@@ -381,10 +508,10 @@ def run_analyze(raw_dir: Path | None = None, *, allow_empty: bool = False) -> Pa
         raise ValueError("生ログディレクトリがありません。先に pull するか --raw-dir を指定してください")
 
     access_log = source_dir / "access.log"
-    slow_log = source_dir / "mysql-slow.log"
+    slow_logs = _present_slow_logs(source_dir)
 
     has_access = _has_log_content(access_log)
-    has_slow = _has_log_content(slow_log)
+    has_slow = bool(slow_logs)
     if not allow_empty and not has_access and not has_slow:
         raise ValueError(
             "access.log / slow log の中身がありません。先に pull するか allow_empty を使ってください"
@@ -402,18 +529,27 @@ def run_analyze(raw_dir: Path | None = None, *, allow_empty: bool = False) -> Pa
         encoding="utf-8",
     )
 
-    slow_txt = ""
+    slow_parts: list[str] = []
+    slow_kinds: list[str] = []
     if has_slow:
-        slow_txt = _analyze_slow(slow_log)
+        multiple = len(slow_logs) > 1
+        for slow_log in slow_logs:
+            text, kind = _analyze_slow(slow_log)
+            slow_kinds.append(kind)
+            if multiple:
+                slow_parts.append(f"# file: {slow_log.name}\n\n{text.rstrip()}\n")
+            else:
+                slow_parts.append(text)
+        slow_txt = "\n".join(slow_parts)
     else:
         slow_txt = "# slow query ログなし\n"
     (analyze_dir / "slow.txt").write_text(slow_txt, encoding="utf-8")
 
     summary = _write_summary(
         alp_data,
-        slow_txt,
         access_log=access_log if has_access else None,
-        slow_log=slow_log if has_slow else None,
+        slow_logs=slow_logs if has_slow else [],
+        slow_kinds=slow_kinds,
     )
     (analyze_dir / "summary.md").write_text(summary, encoding="utf-8")
 
