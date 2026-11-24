@@ -1,12 +1,16 @@
+import os
+import shlex
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
+from isuctl.analyze import SLOW_LOG_NAMES
 from isuctl.cli import app
 from isuctl.config import Host, IsuconConfig, ProjectConfig, SshConfig, save_config
-from isuctl.pull import run_pull
+from isuctl.pull import REMOTE_LOG_PATHS, _newest_match_script, run_pull
 
 
 def _write_config(tmp_path: Path, *, hosts: list[Host]) -> Path:
@@ -62,8 +66,11 @@ def test_run_pull_copies_existing_logs(tmp_path: Path, monkeypatch):
     remote_paths = [r for r, _ in rsync_calls]
     assert "/var/log/nginx/access.ltsv.log" in remote_paths
     assert "/var/log/nginx/access.log" not in remote_paths
+    assert "/var/log/apache2/access.log" not in remote_paths
+    assert "/var/log/httpd/access_log" not in remote_paths
     assert "/var/log/mysql/mysql-slow.log" in remote_paths
     assert "/tmp/mysql-slow.log" not in remote_paths
+    assert not (raw_dir / "slow.log").exists()
 
 
 def test_run_pull_requires_hosts(tmp_path: Path):
@@ -163,3 +170,140 @@ def test_run_pull_falls_back_to_sudo_copy_on_permission_denied(
     assert (raw_dir / "access.log").read_text(encoding="utf-8") == "ok"
     assert any("sudo cp" in cmd for cmd in ssh_cmds)
     assert any(p.startswith("/tmp/isuctl-pull-") for p in rsync_calls)
+
+
+def test_slow_local_names_are_visible_to_analyze():
+    slow_locals = {local for _, local in REMOTE_LOG_PATHS if local != "access.log"}
+    assert slow_locals <= set(SLOW_LOG_NAMES)
+    assert "mysql-slow.log" in slow_locals
+    assert "slow.log" in slow_locals
+
+
+def test_newest_match_script_picks_latest_file(tmp_path: Path):
+    older = tmp_path / "postgresql-14-main.log"
+    newer = tmp_path / "postgresql-16-main.log"
+    older.write_text("old\n", encoding="utf-8")
+    newer.write_text("new\n", encoding="utf-8")
+    os.utime(older, (1_000_000_000, 1_000_000_000))
+    os.utime(newer, (1_700_000_000, 1_700_000_000))
+
+    script = _newest_match_script(str(tmp_path / "*.log"))
+    result = subprocess.run(
+        ["bash", "-c", script],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == str(newer)
+
+
+def test_newest_match_script_prints_nothing_when_empty(tmp_path: Path):
+    script = _newest_match_script(str(tmp_path / "*.log"))
+    result = subprocess.run(
+        ["bash", "-c", script],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_newest_match_script_rejects_unsafe_glob():
+    with pytest.raises(ValueError, match="unsafe log glob"):
+        _newest_match_script("/var/log/postgresql/$(id).log")
+
+
+def _pull_selected(tmp_path: Path, monkeypatch, present: set[str], glob_hits: dict[str, str]):
+    monkeypatch.chdir(tmp_path)
+    cfg_path = _write_config(
+        tmp_path,
+        hosts=[Host(name="app1", host="10.0.0.1", role=["app"])],
+    )
+    rsync_calls: list[str] = []
+
+    def fake_ssh(ssh, host, cmd, check=True):
+        class R:
+            returncode = 1
+            stdout = ""
+            stderr = ""
+
+        if "for f in " in cmd:
+            for pattern, path in glob_hits.items():
+                if f"for f in {pattern}" in cmd:
+                    R.returncode = 0
+                    R.stdout = f"{path}\n"
+                    return R()
+            R.returncode = 0
+            R.stdout = "\n"
+            return R()
+        if "test -e " in cmd:
+            path = shlex.split(cmd)[-1]
+            R.returncode = 0 if path in present else 1
+            return R()
+        return R()
+
+    def fake_rsync(ssh, host, remote_file, local_file):
+        rsync_calls.append(remote_file)
+        local_file.parent.mkdir(parents=True, exist_ok=True)
+        local_file.write_text(f"from {remote_file}\n", encoding="utf-8")
+
+    with (
+        patch("isuctl.pull.run_ssh", side_effect=fake_ssh),
+        patch("isuctl.pull.rsync_file_from_remote", side_effect=fake_rsync),
+        patch("isuctl.pull.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-140000"
+        raw_dir = run_pull(cfg_path)
+    return raw_dir, rsync_calls
+
+
+def test_run_pull_collects_apache_and_postgres_logs(tmp_path: Path, monkeypatch):
+    raw_dir, rsync_calls = _pull_selected(
+        tmp_path,
+        monkeypatch,
+        present={"/var/log/apache2/access.log"},
+        glob_hits={
+            "/var/log/postgresql/*.log": "/var/log/postgresql/postgresql-16-main.log",
+        },
+    )
+    assert (raw_dir / "access.log").read_text(encoding="utf-8") == (
+        "from /var/log/apache2/access.log\n"
+    )
+    assert (raw_dir / "slow.log").read_text(encoding="utf-8") == (
+        "from /var/log/postgresql/postgresql-16-main.log\n"
+    )
+    assert not (raw_dir / "mysql-slow.log").exists()
+    assert "/var/log/nginx/access.ltsv.log" not in rsync_calls
+    assert "/var/log/httpd/access_log" not in rsync_calls
+    assert "/var/log/postgresql/postgresql-16-main.log" in rsync_calls
+
+
+def test_run_pull_collects_httpd_access_log(tmp_path: Path, monkeypatch):
+    raw_dir, rsync_calls = _pull_selected(
+        tmp_path,
+        monkeypatch,
+        present={"/var/log/httpd/access_log"},
+        glob_hits={},
+    )
+    assert rsync_calls == ["/var/log/httpd/access_log"]
+    assert (raw_dir / "access.log").read_text(encoding="utf-8").startswith("from ")
+    assert not (raw_dir / "slow.log").exists()
+
+
+def test_run_pull_keeps_mysql_and_postgres_slow_logs(tmp_path: Path, monkeypatch):
+    raw_dir, rsync_calls = _pull_selected(
+        tmp_path,
+        monkeypatch,
+        present={"/var/log/mysql/mysql-slow.log"},
+        glob_hits={
+            "/var/lib/postgresql/*/main/log/*.log": (
+                "/var/lib/postgresql/16/main/log/postgresql-2026-08-09.log"
+            ),
+        },
+    )
+    assert "/var/log/mysql/mysql-slow.log" in rsync_calls
+    assert "/var/lib/postgresql/16/main/log/postgresql-2026-08-09.log" in rsync_calls
+    assert (raw_dir / "mysql-slow.log").exists()
+    assert (raw_dir / "slow.log").exists()

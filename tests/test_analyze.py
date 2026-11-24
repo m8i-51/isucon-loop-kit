@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from isuctl.analyze import (
     _alp_command,
+    _fallback_postgres_summary,
     _fallback_slow_summary,
     _normalize_alp_data,
     aggregate_ltsv_by_uri,
@@ -99,6 +100,7 @@ def test_run_analyze_python_fallback(tmp_path: Path, monkeypatch):
     summary = (out_dir / "summary.md").read_text(encoding="utf-8")
     assert "/api/foo" in summary
     assert "1.200" in summary or "1.2" in summary
+    assert "pt-query-digest が使えないため" in summary
 
 
 def test_run_analyze_uses_latest_raw_dir(tmp_path: Path, monkeypatch):
@@ -272,3 +274,205 @@ def test_run_analyze_uses_alp_when_times_are_nonzero(tmp_path: Path, monkeypatch
     alp = json.loads((out_dir / "alp.json").read_text(encoding="utf-8"))
     assert alp[0]["uri"] == "/from-alp"
     assert alp[0]["sum_time"] == pytest.approx(9.5)
+
+
+SYNTHETIC_POSTGRES_SLOW = """\
+2026-08-09 12:00:00.000 UTC [10] LOG:  duration: 10.000 ms  statement: SELECT id FROM accounts WHERE id = 1;
+2026-08-09 12:00:01.000 UTC [10] LOG:  duration: 30.000 ms  statement: SELECT id FROM accounts WHERE id = 1;
+2026-08-09 12:00:02.000 UTC [11] LOG:  duration: 5.500 ms  execute <unnamed>: UPDATE sessions SET seen_at = now() WHERE id = 2;
+2026-08-09 12:00:03.000 UTC [12] app@app LOG:  duration: 1000.000 ms  statement: SELECT id FROM reports WHERE day = '2026-08-09';
+2026-08-09 12:00:04.000 UTC [13] LOG:  duration: 9.000 ms  statement: INSERT INTO events VALUES (1),(2),(3),(4),(5);
+"""
+
+SYNTHETIC_MYSQL_SLOW = """\
+# Query_time: 0.200000  Lock_time: 0.000000 Rows_sent: 1  Rows_examined: 10
+SELECT id FROM accounts WHERE id = 1;
+"""
+
+
+def test_fallback_postgres_summary_ranks_by_total_duration(tmp_path: Path):
+    slow = tmp_path / "slow.log"
+    slow.write_text(SYNTHETIC_POSTGRES_SLOW, encoding="utf-8")
+    summary = _fallback_postgres_summary(slow)
+    assert "PostgreSQL slow log" in summary
+    assert "pt-query-digest" not in summary
+    assert summary.index("FROM reports") < summary.index("FROM accounts")
+    assert summary.index("FROM accounts") < summary.index("UPDATE sessions")
+    assert "calls=2" in summary
+    assert "total_ms=40.000" in summary
+    assert "total_ms=1000.000" in summary
+    assert "INSERT INTO events" not in summary
+
+
+def test_run_analyze_postgres_slow_log(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "slow.log").write_text(SYNTHETIC_POSTGRES_SLOW, encoding="utf-8")
+
+    with (
+        patch("isuctl.analyze.shutil.which", return_value=None),
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
+    assert "SELECT id FROM reports WHERE day = '2026-08-09'" in slow_txt
+    assert "pt-query-digest" not in slow_txt
+    summary = (out_dir / "summary.md").read_text(encoding="utf-8")
+    assert "`slow.log`" in summary
+    assert "PostgreSQL の slow ログ" in summary
+
+
+def test_run_analyze_detects_postgres_format_in_mysql_slow_name(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "mysql-slow.log").write_text(SYNTHETIC_POSTGRES_SLOW, encoding="utf-8")
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/pt-query-digest" if name == "pt-query-digest" else None
+
+    with (
+        patch("isuctl.analyze.shutil.which", side_effect=fake_which),
+        patch("isuctl.analyze.subprocess.run") as run,
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    run.assert_not_called()
+    slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
+    assert "PostgreSQL slow log" in slow_txt
+    assert "pt-query-digest" not in slow_txt
+
+
+def test_run_analyze_mysql_format_in_slow_log_keeps_query_time(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "slow.log").write_text(SYNTHETIC_MYSQL_SLOW, encoding="utf-8")
+
+    with (
+        patch("isuctl.analyze.shutil.which", return_value=None),
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
+    assert "Query_time=" in slow_txt
+    assert "PostgreSQL slow log" not in slow_txt
+    assert "SELECT id FROM accounts WHERE id = 1" in slow_txt
+
+
+def test_run_analyze_mysql_still_uses_pt_query_digest(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "mysql-slow.log").write_text(SYNTHETIC_MYSQL_SLOW, encoding="utf-8")
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/pt-query-digest" if name == "pt-query-digest" else None
+
+    with (
+        patch("isuctl.analyze.shutil.which", side_effect=fake_which),
+        patch("isuctl.analyze.subprocess.run") as run,
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        run.return_value = type(
+            "R", (), {"returncode": 0, "stdout": "digest output\n", "stderr": ""}
+        )()
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    cmd = run.call_args[0][0]
+    assert cmd[0] == "pt-query-digest"
+    assert "digest output" in (out_dir / "slow.txt").read_text(encoding="utf-8")
+
+
+def test_run_analyze_includes_mysql_and_postgres_slow_logs(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "mysql-slow.log").write_text(SYNTHETIC_MYSQL_SLOW, encoding="utf-8")
+    (raw_dir / "slow.log").write_text(SYNTHETIC_POSTGRES_SLOW, encoding="utf-8")
+
+    with (
+        patch("isuctl.analyze.shutil.which", return_value=None),
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
+    assert "# file: mysql-slow.log" in slow_txt
+    assert "# file: slow.log" in slow_txt
+    assert "Query_time=" in slow_txt
+    assert "FROM reports" in slow_txt
+    summary = (out_dir / "summary.md").read_text(encoding="utf-8")
+    assert "`mysql-slow.log`" in summary
+    assert "`slow.log`" in summary
+    assert "pt-query-digest が使えないため" in summary
+    assert "PostgreSQL の slow ログ" in summary
+
+
+def test_run_analyze_uses_pgbadger_when_present(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    slow = raw_dir / "slow.log"
+    slow.write_text(SYNTHETIC_POSTGRES_SLOW, encoding="utf-8")
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/pgbadger" if name == "pgbadger" else None
+
+    with (
+        patch("isuctl.analyze.shutil.which", side_effect=fake_which),
+        patch("isuctl.analyze.subprocess.run") as run,
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        run.return_value = type(
+            "R", (), {"returncode": 0, "stdout": "QUERY SUMMARY\n", "stderr": ""}
+        )()
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    cmd = run.call_args[0][0]
+    assert cmd[0] == "pgbadger"
+    assert str(slow) in cmd
+    slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
+    assert "QUERY SUMMARY" in slow_txt
+    assert "PostgreSQL slow log" in slow_txt
+
+
+def test_run_analyze_falls_back_when_pgbadger_fails(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "slow.log").write_text(SYNTHETIC_POSTGRES_SLOW, encoding="utf-8")
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/pgbadger" if name == "pgbadger" else None
+
+    with (
+        patch("isuctl.analyze.shutil.which", side_effect=fake_which),
+        patch("isuctl.analyze.subprocess.run") as run,
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        run.return_value = type(
+            "R", (), {"returncode": 1, "stdout": "", "stderr": "nope"}
+        )()
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    slow_txt = (out_dir / "slow.txt").read_text(encoding="utf-8")
+    assert "SELECT id FROM reports" in slow_txt
+    assert "手元ツールなし" in slow_txt
