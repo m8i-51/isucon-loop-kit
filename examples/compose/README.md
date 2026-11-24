@@ -2,24 +2,24 @@
 
 過去問をローカルの compose で動かし、`discover` から `pack` までを SSH なしで通すための見本です。中身は汎用の web / app / db / bench で、特定の年度の問題ではありません。競技ホストの Ansible inventory は変えません。
 
-`project_dir` はこの `isucon.toml` からの相対パスです。`local_dir`（`./work`）は、コマンドを起動したディレクトリからの相対パスです。
+ファイル名は `isucon.example.toml` です。手元の `isucon.toml` は gitignore されるので、見本は別名で置いてあります。`project_dir` はこのファイルからの相対パスです。`local_dir`（`./work`）は、コマンドを起動したディレクトリからの相対パスです。
 
 ## 起動
 
 ```bash
 # キットのルートで
-isuctl provision --config examples/compose/isucon.toml
-isuctl discover --config examples/compose/isucon.toml
-isuctl sync-down --config examples/compose/isucon.toml
+isuctl provision --config examples/compose/isucon.example.toml
+isuctl discover --config examples/compose/isucon.example.toml
+isuctl sync-down --config examples/compose/isucon.example.toml
 # work/ を編集してコミットしてから
-isuctl deploy --config examples/compose/isucon.toml --branch HEAD
-isuctl check --config examples/compose/isucon.toml
-isuctl bootstrap --config examples/compose/isucon.toml
-isuctl bench --config examples/compose/isucon.toml
-isuctl pull --config examples/compose/isucon.toml
+isuctl deploy --config examples/compose/isucon.example.toml --branch HEAD
+isuctl check --config examples/compose/isucon.example.toml
+isuctl bootstrap --config examples/compose/isucon.example.toml
+isuctl bench --config examples/compose/isucon.example.toml
+isuctl pull --config examples/compose/isucon.example.toml
 isuctl analyze && isuctl pack
 isuctl bench-note
-isuctl rollback --config examples/compose/isucon.toml --ref HEAD~1
+isuctl rollback --config examples/compose/isucon.example.toml --ref HEAD~1
 ```
 
 `past-problem/` は骨格です。過去問の compose に差し替えるときは、`service` 名とログのパス、`source_dest`（Dockerfile の `COPY` 元）をその問題に合わせます。Go のバイナリはイメージのビルド時に焼かれるので、コンテナの中のソースを直してもプロセスは変わりません。`deploy` が ref を build context に置いて `docker compose build` と `up -d --wait` します。未コミットの変更はイメージに入りません。

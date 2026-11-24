@@ -275,7 +275,7 @@ def test_compose_probe_prints_five_status_lines() -> None:
 
 
 def test_example_config_loads_and_project_exists() -> None:
-    path = REPO / "examples" / "compose" / "isucon.toml"
+    path = REPO / "examples" / "compose" / "isucon.example.toml"
     cfg = load_config(path)
     assert cfg.compose is not None
     assert cfg.compose.bench_service == "bench"

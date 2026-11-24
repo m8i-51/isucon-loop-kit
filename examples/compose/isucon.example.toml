@@ -1,0 +1,53 @@
+# Compose 用の host inventory。
+# 競技用の Ansible inventory（ansible/inventory/hosts.yml）とは別ファイル。
+# project_dir はこのファイルからの相対パス。local_dir は実行時の cwd から。
+
+[project]
+name = "practice"
+local_dir = "./work"
+
+[ssh]
+user = "isucon"
+key = "~/.ssh/id_ed25519"
+
+[compose]
+project_dir = "past-problem"
+file = "compose.yaml"
+project_name = "practice"
+build = ["app"]
+up = ["web", "app", "db"]
+source_dest = "app/src"
+bench_service = "bench"
+bench_profile = "bench"
+bench_command = ["./bench", "-target", "http://web"]
+slow_threshold = "200ms"
+db_name = "practice"
+db_user = "postgres"
+http_url = "http://127.0.0.1/"
+
+[[hosts]]
+name = "app1"
+host = "app"
+role = ["app"]
+remote_app_dir = "/home/isucon/webapp"
+transport = "compose"
+service = "app"
+
+[[hosts]]
+name = "web1"
+host = "web"
+role = ["web"]
+remote_app_dir = "/home/isucon/webapp"
+transport = "compose"
+service = "web"
+access_log = "/var/log/nginx/access.ltsv.log"
+
+[[hosts]]
+name = "db1"
+host = "db"
+role = ["db"]
+remote_app_dir = "/home/isucon/webapp"
+transport = "compose"
+service = "db"
+db_kind = "postgres"
+slow_log_via = "stderr"
