@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from isuctl.config import Host, IsuconConfig, SshConfig, load_config, save_config
+from isuctl.compose_transport import discover_compose
+from isuctl.config import (
+    Host,
+    IsuconConfig,
+    SshConfig,
+    load_config,
+    save_config,
+    uses_compose,
+)
+from isuctl.probe import interpret_probe_stdout
 from isuctl.remote import run_ssh
-
-
-def _status_at(lines: list[str], index: int) -> str:
-    if len(lines) <= index:
-        return "inactive"
-    return lines[index].strip() or "inactive"
-
 
 PROBE_COMMAND = """set -e
 APP_DIR=""
@@ -44,29 +46,13 @@ printf '%s\\n' "${postgres_status:-inactive}"
 
 def discover_host(ssh: SshConfig, host: Host) -> dict[str, object]:
     result = run_ssh(ssh, host, PROBE_COMMAND)
-    lines = result.stdout.rstrip().splitlines()
-    app_dir = lines[0].strip() if len(lines) > 0 else ""
-    nginx_status = _status_at(lines, 1)
-    mysql_status = _status_at(lines, 2)
-    apache_status = _status_at(lines, 3)
-    postgres_status = _status_at(lines, 4)
-
-    roles: list[str] = []
-    if app_dir.startswith("/"):
-        roles.append("app")
-    if nginx_status == "active" or apache_status == "active":
-        roles.append("web")
-    if mysql_status == "active" or postgres_status == "active":
-        roles.append("db")
-
-    updates: dict[str, object] = {"role": roles}
-    if app_dir.startswith("/"):
-        updates["remote_app_dir"] = app_dir
-    return updates
+    return interpret_probe_stdout(result.stdout)
 
 
 def run_discover(config_path: Path) -> IsuconConfig:
     config = load_config(config_path)
+    if uses_compose(config):
+        return discover_compose(config_path)
     for host in config.hosts:
         updates = discover_host(config.ssh, host)
         if "remote_app_dir" in updates:

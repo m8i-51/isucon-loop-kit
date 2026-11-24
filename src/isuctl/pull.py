@@ -1,55 +1,16 @@
 from __future__ import annotations
 
-import re
 import shlex
 import sys
 from datetime import datetime
 from pathlib import Path
 
-from isuctl.config import Host, load_config
+from isuctl.compose_transport import pull_compose
+from isuctl.config import Host, load_config, uses_compose
 from isuctl.hostsutil import primary_host
+from isuctl.log_sources import REMOTE_LOG_PATHS, _is_glob, _newest_match_script
 from isuctl.paths import out_dir
 from isuctl.remote import RemoteError, rsync_file_from_remote, run_ssh
-
-# First existing path for each local name wins. nginx / MySQL stay ahead of
-# Apache / PostgreSQL so the old loop still prefers those logs.
-REMOTE_LOG_PATHS: list[tuple[str, str]] = [
-    ("/var/log/nginx/access.ltsv.log", "access.log"),
-    ("/var/log/nginx/access.log", "access.log"),
-    ("/var/log/apache2/access.log", "access.log"),
-    ("/var/log/httpd/access_log", "access.log"),
-    ("/var/log/httpd/access.log", "access.log"),
-    ("/var/log/mysql/mysql-slow.log", "mysql-slow.log"),
-    ("/tmp/mysql-slow.log", "mysql-slow.log"),
-    # log_min_duration_statement is written to the server log, not a separate file.
-    ("/var/log/postgresql/*.log", "slow.log"),
-    ("/var/lib/postgresql/*/main/log/*.log", "slow.log"),
-    ("/var/lib/pgsql/data/log/*.log", "slow.log"),
-    ("/var/lib/pgsql/*/data/log/*.log", "slow.log"),
-]
-
-_GLOB_META_RE = re.compile(r"[*?]")
-_GLOB_SAFE_RE = re.compile(r"^[A-Za-z0-9_./*?-]+$")
-
-
-def _is_glob(pattern: str) -> bool:
-    return _GLOB_META_RE.search(pattern) is not None
-
-
-def _newest_match_script(pattern: str) -> str:
-    """Bash script that prints the newest file matching pattern, or nothing."""
-    if not _GLOB_SAFE_RE.fullmatch(pattern):
-        raise ValueError(f"unsafe log glob: {pattern}")
-    return (
-        "shopt -s nullglob; "
-        "newest=; newest_mtime=-1; "
-        f"for f in {pattern}; do "
-        '[ -f "$f" ] || continue; '
-        'm=$(stat -c %Y "$f" 2>/dev/null || echo -1); '
-        'if [ "$m" -gt "$newest_mtime" ]; then newest=$f; newest_mtime=$m; fi; '
-        "done; "
-        'printf "%s\\n" "$newest"'
-    )
 
 
 def _remote_newest_match(ssh, host: Host, pattern: str) -> str | None:
@@ -114,6 +75,8 @@ def _pull_one(ssh, host: Host, remote_path: str, local_file: Path) -> None:
 
 def run_pull(config_path: Path) -> Path:
     config = load_config(config_path)
+    if uses_compose(config):
+        return pull_compose(config_path)
     if not config.hosts:
         raise ValueError("config にホストが1つ以上必要です")
 

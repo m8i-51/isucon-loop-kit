@@ -13,11 +13,13 @@ from isuctl.bench_note import (
     run_bench_note,
 )
 from isuctl.bootstrap import run_bootstrap
+from isuctl.compose_transport import run_bench
 from isuctl.config import (
     Host,
     IsuconConfig,
     ProjectConfig,
     SshConfig,
+    config_uses_compose,
     default_config_path,
     save_config,
 )
@@ -38,6 +40,22 @@ def _version_callback(value: bool) -> None:
     if value:
         typer.echo(__version__)
         raise typer.Exit()
+
+
+def _compose_config(path: Path) -> Path | None:
+    """Return path when it selects the compose transport.
+
+    A missing file stays on the SSH+Ansible path. A file that exists but cannot
+    be parsed raises, so a broken compose config cannot fall through to ansible.
+    """
+    if not path.is_file():
+        return None
+    try:
+        if config_uses_compose(path):
+            return path
+    except (OSError, ValueError) as exc:
+        raise RemoteError(f"設定を読めません: {path}: {exc}") from exc
+    return None
 
 
 def _cli_call[T](fn: Callable[..., T], *args: object, **kwargs: object) -> T:
@@ -88,6 +106,9 @@ def ensure_access(
     ),
 ) -> None:
     """bootstrap_user (ubuntu) の SSH 鍵を競技ユーザー (isucon) へコピーする。"""
+    if _cli_call(_compose_config, config) is not None:
+        typer.echo("compose transport では SSH の鍵配布は不要です")
+        return
     _cli_call(run_ensure_access, config)
 
 
@@ -130,30 +151,53 @@ def deploy(
         default_config_path(),
         "--config",
         "-c",
-        help="isucon.toml のパス（互換・未使用）",
+        help="isucon.toml（[compose] のとき compose deploy。無ければ ansible）",
     ),
 ) -> None:
-    """ansible/playbooks/deploy.yml でデプロイする（AI・人間の正）。"""
-    del config
-    _cli_call(run_deploy, None, branch=branch, limit=limit)
+    """ansible/playbooks/deploy.yml、または compose build + up でデプロイする。"""
+    compose_path = _cli_call(_compose_config, config)
+    if compose_path is None:
+        _cli_call(run_deploy, None, branch=branch, limit=limit)
+    else:
+        _cli_call(run_deploy, compose_path, branch=branch, limit=limit)
     typer.echo(f"デプロイ完了 branch={branch}")
 
 
 @app.command("check")
 def check(
-    limit: str | None = typer.Option(None, "--limit", help="Ansible --limit"),
+    limit: str | None = typer.Option(None, "--limit", help="Ansible --limit / compose の host 名"),
+    config: Path = typer.Option(
+        default_config_path(),
+        "--config",
+        "-c",
+        help="isucon.toml（[compose] のときだけ使う）",
+    ),
 ) -> None:
-    """ansible/playbooks/check.yml でヘルスチェックする。"""
-    _cli_call(run_check, limit=limit)
+    """ansible/playbooks/check.yml、または compose の稼働確認。"""
+    compose_path = _cli_call(_compose_config, config)
+    if compose_path is None:
+        _cli_call(run_check, limit=limit)
+    else:
+        _cli_call(run_check, limit=limit, config_path=compose_path)
     typer.echo("check 完了")
 
 
 @app.command("provision")
 def provision(
-    limit: str | None = typer.Option(None, "--limit", help="Ansible --limit"),
+    limit: str | None = typer.Option(None, "--limit", help="Ansible --limit / compose の host 名"),
+    config: Path = typer.Option(
+        default_config_path(),
+        "--config",
+        "-c",
+        help="isucon.toml（[compose] のときだけ使う）",
+    ),
 ) -> None:
-    """ansible/playbooks/init.yml で初動セットアップする。"""
-    _cli_call(run_provision, limit=limit)
+    """ansible/playbooks/init.yml、または compose up --build。"""
+    compose_path = _cli_call(_compose_config, config)
+    if compose_path is None:
+        _cli_call(run_provision, limit=limit)
+    else:
+        _cli_call(run_provision, limit=limit, config_path=compose_path)
     typer.echo("provision 完了")
 
 
@@ -232,6 +276,17 @@ def pack(
     """Cursor 用の分析パックを作る。"""
     path = _cli_call(run_pack, config, analyze_dir)
     typer.echo(f"パック出力: {path}")
+
+
+@app.command("bench")
+def bench(
+    config: Path = typer.Option(
+        default_config_path(), "--config", "-c", help="isucon.toml のパス"
+    ),
+) -> None:
+    """compose ネットワーク内でベンチを実行する。SSH の競技サーバでは起動しない。"""
+    _cli_call(run_bench, config)
+    typer.echo("bench 完了")
 
 
 @app.command("bench-note")

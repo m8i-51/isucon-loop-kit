@@ -10,3 +10,4 @@ Single home for ISUCON tooling: **this repo**.
 Do not create sibling kits under `~/isucon-*` or `Projects/isucon-*` without putting them here first.
 
 - `docs/lessons-2026.md` — reusable lessons distilled from 2026 (not the raw contest log)
+- `examples/compose/` — generic compose inventory for the local practice loop (`transport = "compose"`)

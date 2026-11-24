@@ -4,7 +4,8 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from isuctl.config import Host, load_config
+from isuctl.compose_transport import sync_down_compose
+from isuctl.config import Host, load_config, uses_compose
 from isuctl.hostsutil import primary_host
 from isuctl.paths import mark_ready
 from isuctl.remote import rsync_file_from_remote, rsync_from_remote, run_ssh
@@ -78,6 +79,8 @@ def _sync_optional_paths(ssh, host: Host, local_dir: Path) -> None:
 
 def run_sync_down(config_path: Path) -> Path:
     config = load_config(config_path)
+    if uses_compose(config):
+        return sync_down_compose(config_path)
     host = primary_host(config.hosts)
     local_dir = (Path.cwd() / config.project.local_dir).resolve()
     local_dir.mkdir(parents=True, exist_ok=True)

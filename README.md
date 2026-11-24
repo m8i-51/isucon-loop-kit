@@ -41,6 +41,7 @@ discover → sync-down → 編集 → isuctl deploy → isuctl check → bench �
 - `ansible-playbook`（`isuctl deploy` / `check` / `provision` が呼ぶ）
 - 競技 EC2 用の SSH 鍵
 - （任意）laptop 側の `alp` / `pt-query-digest` — `analyze` は手元で動く。無くてもフォールバックする。PostgreSQL の slow ログも `alp` / `pt-query-digest` と同じ前提で、手元にツールが無ければ duration 行の集計へフォールバックする。
+- （任意）Docker Compose v2（`docker compose`）。`isucon.toml` に `[compose]` があるとき、ループはローカルの compose プロジェクトに対して動く。
 
 ## セットアップ
 
@@ -79,7 +80,26 @@ isuctl rollback --ref HEAD~1
 
 既定ユーザーは `isucon`（`bootstrap_user=ubuntu`）。
 
-**デプロイ:** `isuctl deploy` / `check` / `provision` が入口。中身は `ansible/playbooks/`。サーバは `repo_url` の branch / SHA を checkout する（手元 `work/` の rsync ではない）。ref は先に remote へ載せておく。切り戻しは `isuctl rollback`。
+## 手元の Docker Compose で練習
+
+`isucon.toml` に `[compose]` があるとき、上のループはローカルの compose プロジェクトに対して動く。見本は [examples/compose](examples/compose/README.md)。各 `[[hosts]]` の `transport = "compose"` と `service` が、ホスト役割と compose service の対応である。`[compose]` が無いときの `deploy` / `check` / `provision` は今まで通り Ansible を呼ぶ。競技ホストへ SSH しない。
+
+| コマンド | compose |
+| --- | --- |
+| discover / sync-down / snapshot / pull | `docker compose exec` と `docker compose cp`。DB が stderr に出す slow ログは `docker compose logs` |
+| deploy | 指定 ref を `git archive` して build context の `source_dest` へ置き、`docker compose build` のあと `up -d --wait` |
+| rollback | 手元を `--ref` に reset してから、その SHA を deploy |
+| check | `docker compose ps`。web は `nginx -t` または `apachectl -t` |
+| provision | `docker compose up -d --build --wait` |
+| bootstrap | nginx / Apache の LTSV、MySQL slow、PostgreSQL の `ALTER SYSTEM SET log_min_duration_statement`。`pg_stat_statements` は `shared_preload_libraries` に入っているときだけ有効化 |
+| bench | compose ネットワーク内で `docker compose run`（bench profile） |
+| analyze / pack / bench-note | 手元のファイルだけ |
+
+Go のアプリイメージはビルド時にバイナリを焼く。`deploy` の build と up が反映の入口で、未コミットの変更はイメージに入らない。web / db を作り直したら、測る前に `bootstrap` をもう一度実行する。
+
+macOS の Docker Desktop では、公開ポートへの同時接続がおおよそ 128 を超えると RST になる。macOS の somaxconn がこの上限で、Docker Desktop のポート転送がそれに従う。ベンチは compose ネットワークの内側で走らせる。`isuctl bench` が bench profile の service で、設定したコマンドを実行する。公開ポートに対してホストから `go run` したベンチは、この上限でスコアが落ちる。
+
+**デプロイ（競技ホスト）:** `isuctl deploy` / `check` / `provision` が入口。中身は `ansible/playbooks/`。サーバは `repo_url` の branch / SHA を checkout する（手元 `work/` の rsync ではない）。ref は先に remote へ載せておく。切り戻しは `isuctl rollback`。`[compose]` があるときは、直前の節の build と up が入口になる。
 
 **`bench-note`:** 前回・最高との差分を出し、前回より低いときは記録前に確認します（`--yes` で省略可）。
 
@@ -101,6 +121,7 @@ AMI なしで一通り回す（Cloud Agent / 手元 Docker）:
 | [設計](docs/superpowers/specs/2026-08-09-isucon-loop-kit-design.md) | 方針 |
 | [pprotein](assets/pprotein/README.md) | alp / slow ビューア（laptop） |
 | [Docker ドックフーディング](assets/isucon14-docker/README.md) | compose + SSH ターゲット |
+| [手元 Compose](examples/compose/README.md) | exec/cp の練習ループ |
 | [AMI チェックリスト](scripts/dogfood-checklist.md) | 実機 E2E・ハマりどころ |
 | [matcher-http.service](assets/isucon14/matcher-http.service) | ISUCON14 CODE=32 回避例 |
 

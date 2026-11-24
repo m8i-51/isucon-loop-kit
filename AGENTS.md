@@ -26,4 +26,12 @@ Hard bans, inventory rules, and the report format: [`ansible/AGENTS.md`](ansible
 
 `rollback` resets the local worktree (`--ref`, default `HEAD~1`), then deploys that SHA through the same ansible path.
 
+## Compose transport (local practice)
+
+When `isucon.toml` has a `[compose]` table, the same loop targets a local compose project instead of SSH. See [examples/compose](examples/compose/README.md). Ansible playbooks stay the contest-host path and are not invoked for that config. Do not point `[compose]` at contest hosts.
+
+`deploy` archives the requested git ref into `source_dest`, then runs `docker compose build` and `up -d --wait`. Go images bake the binary at build time, so a source edit is live only after that rebuild. Uncommitted files are left out of the image. `bench` runs the configured command with `docker compose run` on the bench service/profile.
+
+macOS Docker Desktop: the published-port proxy RSTs above about 128 concurrent connections (`somaxconn`). Run the bench inside the compose network. A host-side `go run` against the published port drops score at that limit.
+
 Layout: [`LAYOUT.md`](LAYOUT.md).
