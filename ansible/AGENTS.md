@@ -23,6 +23,8 @@ ansible all -m ping
 
 `deploy` checks out `branch` from `repo_url`. It does not upload the laptop worktree. Push the ref first.
 
+A `[compose]` table in `isucon.toml` is the local practice transport (`examples/compose`). `isuctl deploy` / `check` / `provision` do not call these playbooks when that table is set. Contest hosts stay on this inventory.
+
 Do not invent alternate deploy paths (no ad-hoc `scp`, no `rsync` of binaries, no one-off SSH loops) unless Koichi explicitly asks.
 
 ## Workflow for every change

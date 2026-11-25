@@ -3,7 +3,8 @@ from __future__ import annotations
 import importlib.resources
 from pathlib import Path
 
-from isuctl.config import Host, load_config
+from isuctl.compose_transport import bootstrap_compose
+from isuctl.config import Host, load_config, uses_compose
 from isuctl.hostsutil import primary_host
 from isuctl.remote import rsync_file_to_remote, run_ssh
 
@@ -112,6 +113,9 @@ def _install_pt_query_digest(ssh, host: Host) -> None:
 
 def run_bootstrap(config_path: Path) -> None:
     config = load_config(config_path)
+    if uses_compose(config):
+        bootstrap_compose(config_path)
+        return
     if not config.hosts:
         raise ValueError("config にホストが1つ以上必要です")
 

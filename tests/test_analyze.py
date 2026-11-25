@@ -202,6 +202,19 @@ def test_parse_alp_stdout_tsv_with_header():
     assert parsed[0]["sum"] == "1.2"
 
 
+def test_parse_alp_stdout_tsv_title_case_header():
+    text = "Count\tUri\tSum\tAvg\n2\t/api/foo\t1.2\t0.6\n"
+    parsed = parse_alp_stdout(text)
+    assert parsed is not None
+    assert parsed[0]["uri"] == "/api/foo"
+    assert parsed[0]["count"] == "2"
+    assert parsed[0]["sum"] == "1.2"
+
+
+def test_parse_alp_stdout_tsv_header_only_returns_none():
+    assert parse_alp_stdout("Count\tUri\tSum\tAvg\n") is None
+
+
 def test_parse_alp_stdout_json_header_matrix():
     text = (
         '[["count","uri","sum","avg"],'
@@ -211,6 +224,38 @@ def test_parse_alp_stdout_json_header_matrix():
     assert parsed is not None
     assert parsed[0]["uri"] == "/api/foo"
     assert parsed[0]["sum"] == 1.2
+
+
+def test_run_analyze_falls_back_when_alp_prints_header_only(
+    tmp_path: Path, monkeypatch
+):
+    """alp 1.x title-case TSV with no rows must not crash; use the LTSV fallback."""
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "access.log").write_text(
+        (FIXTURES / "sample_access.ltsv").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (raw_dir / "mysql-slow.log").write_text("# empty\n", encoding="utf-8")
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/alp" if name == "alp" else None
+
+    with (
+        patch("isuctl.analyze.shutil.which", side_effect=fake_which),
+        patch("isuctl.analyze.subprocess.run") as run,
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        run.return_value = type(
+            "R", (), {"returncode": 0, "stdout": "Count\tUri\tSum\tAvg\n", "stderr": ""}
+        )()
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    alp = json.loads((out_dir / "alp.json").read_text(encoding="utf-8"))
+    assert alp[0]["uri"] == "/api/foo"
+    assert alp[0]["sum_time"] == pytest.approx(1.2)
 
 
 def test_run_analyze_falls_back_when_alp_times_are_zero(tmp_path: Path, monkeypatch):
@@ -280,6 +325,8 @@ SYNTHETIC_POSTGRES_SLOW = """\
 2026-08-09 12:00:00.000 UTC [10] LOG:  duration: 10.000 ms  statement: SELECT id FROM accounts WHERE id = 1;
 2026-08-09 12:00:01.000 UTC [10] LOG:  duration: 30.000 ms  statement: SELECT id FROM accounts WHERE id = 1;
 2026-08-09 12:00:02.000 UTC [11] LOG:  duration: 5.500 ms  execute <unnamed>: UPDATE sessions SET seen_at = now() WHERE id = 2;
+2026-08-09 12:00:02.500 UTC [14] app@app LOG:  duration: 475.237 ms  execute stmtcache_1bc66df99f09b4f28d1a460009e9ebfc769f5b7b1788275e: SELECT id FROM users WHERE id=$1 AND status='active' FOR NO KEY UPDATE;
+2026-08-09 12:00:02.800 UTC [15] LOG:  duration: 735.570 ms  statement: LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE;
 2026-08-09 12:00:03.000 UTC [12] app@app LOG:  duration: 1000.000 ms  statement: SELECT id FROM reports WHERE day = '2026-08-09';
 2026-08-09 12:00:04.000 UTC [13] LOG:  duration: 9.000 ms  statement: INSERT INTO events VALUES (1),(2),(3),(4),(5);
 """
@@ -301,6 +348,11 @@ def test_fallback_postgres_summary_ranks_by_total_duration(tmp_path: Path):
     assert "calls=2" in summary
     assert "total_ms=40.000" in summary
     assert "total_ms=1000.000" in summary
+    assert "stmtcache_" not in summary
+    assert "FROM users" in summary
+    assert "total_ms=475.237" in summary
+    assert "LOCK TABLE users" in summary
+    assert "total_ms=735.570" in summary
     assert "INSERT INTO events" not in summary
 
 

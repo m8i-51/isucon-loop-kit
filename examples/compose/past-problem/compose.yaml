@@ -1,0 +1,39 @@
+# Generic three-tier layout for local practice. Not a contest problem.
+# `bench` is on profile "bench", so `up` does not publish it.
+# Reach the app as http://web from inside this network.
+
+name: practice
+
+services:
+  web:
+    image: nginx:1.27
+    depends_on:
+      - app
+    volumes:
+      - ./web/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "127.0.0.1:18080:80"
+
+  app:
+    build: ./app
+    expose:
+      - "8080"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_PASSWORD: practice
+      POSTGRES_DB: practice
+
+  bench:
+    profiles: ["bench"]
+    image: debian:bookworm-slim
+    working_dir: /bench
+    volumes:
+      - ./bench:/bench:ro
+    # Image entrypoint stays empty so `compose run bench ./bench ...`
+    # replaces this command instead of appending to sleep.
+    command: ["sleep", "infinity"]

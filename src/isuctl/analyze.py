@@ -26,7 +26,8 @@ SQL_START_RE = re.compile(
 SLOW_LOG_NAMES = ("mysql-slow.log", "slow.log")
 PG_DURATION_RE = re.compile(
     r"duration:\s*([0-9.]+)\s*ms\s+"
-    r"(?:statement|execute|parse|bind)(?:\s+<[^>]*>)?:\s*(.*)$",
+    # "statement: SQL", "execute <unnamed>: SQL", or "execute stmtcache_…: SQL"
+    r"(?:statement|execute|parse|bind)(?:\s+\S+)?:\s*(.*)$",
     re.IGNORECASE,
 )
 POSTGRES_SLOW_MARKER = "# PostgreSQL slow log"
@@ -139,8 +140,10 @@ def _parse_alp_tsv(text: str) -> list[dict[str, float | int | str]] | None:
     header = [col.strip() for col in lines[0].split("\t")]
     start = 0
     colnames: list[str]
-    if header and header[0] in {"count", "method", "uri"}:
-        colnames = header
+    # alp --format tsv prints title-case headers (Count, Uri, Sum, Avg).
+    lowered = [name.lower() for name in header]
+    if lowered and lowered[0] in {"count", "method", "uri"}:
+        colnames = lowered
         start = 1
     else:
         colnames = ["count", "uri", "sum", "avg"]

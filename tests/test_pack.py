@@ -237,3 +237,25 @@ def test_extract_sql_lines_fingerprints_literals():
     assert len(sqls) == 2
     assert "chair_locations" in sqls[0]
     assert "rides" in sqls[1]
+
+
+
+def test_extract_sql_lines_from_postgres_duration_summary():
+    text = "\n".join(
+        [
+            "# PostgreSQL slow log。duration 合計順（log_min_duration_statement）",
+            "# 手元ツールなし。行単位で集計しました",
+            "",
+            "1. calls=21 total_ms=36398.667 mean_ms=1733.270",
+            "LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE;",
+            "",
+            "2. calls=8 total_ms=1541.845 mean_ms=192.731",
+            "SELECT id FROM users WHERE id=$1 AND status='active' FOR NO KEY UPDATE;",
+        ]
+    )
+    sqls = _extract_sql_lines(text)
+    assert sqls[0] == "LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"
+    assert "FOR NO KEY UPDATE" in sqls[1]
+    formatted = _format_top_sqls(sqls)
+    assert "LOCK TABLE users" in formatted
+    assert "FOR NO KEY UPDATE" in formatted
