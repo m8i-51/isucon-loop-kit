@@ -22,7 +22,13 @@ isuctl bench-note
 isuctl rollback --config examples/compose/isucon.example.toml --ref HEAD~1
 ```
 
-`past-problem/` は骨格です。過去問の compose に差し替えるときは、`service` 名とログのパス、`source_dest`（Dockerfile の `COPY` 元）をその問題に合わせます。Go のバイナリはイメージのビルド時に焼かれるので、コンテナの中のソースを直してもプロセスは変わりません。`deploy` が ref を build context に置いて `docker compose build` と `up -d --wait` します。未コミットの変更はイメージに入りません。
+`past-problem/` は骨格です。過去問の compose に差し替えるときは、`service` 名とログのパス、`source_dest`（Dockerfile の `COPY` 元）をその問題に合わせます。Go のバイナリはイメージのビルド時に焼かれるので、コンテナの中のソースを直してもプロセスは変わりません。コンテナにソースが無いときは `sync-down` では取れません。アプリの checkout を `local_dir` に置いてから `deploy` してください。`deploy` が ref を build context に置いて `docker compose build` と `up -d --wait` します。未コミットの変更はイメージに入りません。
+
+`compose.file` を設定すると、そのファイルだけが使われ、同じディレクトリの `compose.override.yaml` は読み込まれません。override も使いたいときは `file` を空のままにしてください。
+
+`bench_command` は `docker compose run` のコマンド引数です。compose 側でベンチバイナリを `entrypoint` にしているときは、フラグだけを書きます。
+
+Alpine の nginx は LTSV を `/etc/nginx/http.d/` に置きます。`/etc/nginx/conf.d` が無い（または root コンテキストで include される）イメージでも `bootstrap` が選びます。
 
 web / db コンテナを作り直すと、`bootstrap` がコピーしたログ設定は消えます。測る前にもう一度 `bootstrap` します。
 

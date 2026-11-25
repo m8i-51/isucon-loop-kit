@@ -38,7 +38,7 @@ def _newest_match_script(pattern: str) -> str:
         "newest=; newest_mtime=-1; "
         f"for f in {pattern}; do "
         '[ -f "$f" ] || continue; '
-        'm=$(stat -c %Y "$f" 2>/dev/null || echo -1); '
+        'm=$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo -1); '
         'if [ "$m" -gt "$newest_mtime" ]; then newest=$f; newest_mtime=$m; fi; '
         "done; "
         'printf "%s\\n" "$newest"'

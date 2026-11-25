@@ -557,6 +557,28 @@ def test_bootstrap_nginx_and_postgres_stderr(
     assert "CREATE EXTENSION" not in sql
     assert not any(_subcommand(call[0]) == "restart" for call in fake.calls)
     assert "shared_preload_libraries" in capsys.readouterr().out
+    assert any(
+        dest.endswith("/etc/nginx/conf.d/isuctl_ltsv.conf")
+        for dest, _text in fake.uploaded
+    )
+
+
+def test_bootstrap_nginx_uses_http_d_when_that_dir_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Alpine nginx keeps site snippets in http.d, not conf.d."""
+    path = _write_compose(tmp_path)
+    fake = DockerFake()
+    fake.by_service["web"] = "nginx\n"
+    fake.exists.add("/etc/nginx/http.d")
+    fake.sql = {"pg_available_extensions": ""}
+    _patch_docker(monkeypatch, fake)
+    from isuctl.bootstrap import run_bootstrap
+
+    run_bootstrap(path)
+    uploaded = [dest for dest, _text in fake.uploaded]
+    assert any(dest.endswith("/etc/nginx/http.d/isuctl_ltsv.conf") for dest in uploaded)
+    assert not any(dest.endswith("/etc/nginx/conf.d/isuctl_ltsv.conf") for dest in uploaded)
 
 
 def test_bootstrap_postgres_creates_extension_when_preloaded(

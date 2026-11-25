@@ -586,17 +586,40 @@ def _detect(client: ComposeClient, host: Host, script: str) -> str:
     return _last_line(result.stdout) or "none"
 
 
+# Alpine nginx includes /etc/nginx/http.d from the http context.
+# /etc/nginx/conf.d is included from the root context there (and the
+# directory may be missing). Debian/Ubuntu include conf.d from http.
+_NGINX_LTSV_PATHS = (
+    "/etc/nginx/http.d/isuctl_ltsv.conf",
+    "/etc/nginx/conf.d/isuctl_ltsv.conf",
+)
+
+
 def _bootstrap_nginx(client: ComposeClient, host: Host) -> None:
-    client.cp_to(
-        _template_path("nginx_ltsv.conf"),
-        host.service,
-        "/etc/nginx/conf.d/isuctl_ltsv.conf",
-    )
-    client.exec_service(
-        host,
-        "touch /var/log/nginx/access.ltsv.log && nginx -t && nginx -s reload",
-    )
-    print(f"{host.name}: nginx LTSV → /var/log/nginx/access.ltsv.log")
+    local = _template_path("nginx_ltsv.conf")
+    candidates = [
+        path
+        for path in _NGINX_LTSV_PATHS
+        if _remote_exists(client, host, str(Path(path).parent))
+    ]
+    if not candidates:
+        # Directory not created yet: keep the Debian/Ubuntu default path.
+        candidates = ["/etc/nginx/conf.d/isuctl_ltsv.conf"]
+    errors: list[str] = []
+    for remote in candidates:
+        client.cp_to(local, host.service, remote)
+        result = client.exec_service(
+            host,
+            "touch /var/log/nginx/access.ltsv.log && nginx -t && nginx -s reload",
+            check=False,
+        )
+        if result.returncode == 0:
+            print(f"{host.name}: nginx LTSV → /var/log/nginx/access.ltsv.log ({remote})")
+            return
+        client.exec_service(host, f"rm -f {shlex.quote(remote)}", check=False)
+        detail = (result.stderr or result.stdout or "").strip()
+        errors.append(f"{remote}: {detail or f'exit {result.returncode}'}")
+    raise RemoteError("nginx LTSV を入れられませんでした: " + "; ".join(errors))
 
 
 def _bootstrap_apache(
