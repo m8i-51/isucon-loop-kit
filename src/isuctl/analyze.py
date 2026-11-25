@@ -26,7 +26,8 @@ SQL_START_RE = re.compile(
 SLOW_LOG_NAMES = ("mysql-slow.log", "slow.log")
 PG_DURATION_RE = re.compile(
     r"duration:\s*([0-9.]+)\s*ms\s+"
-    r"(?:statement|execute|parse|bind)(?:\s+<[^>]*>)?:\s*(.*)$",
+    # "statement: SQL", "execute <unnamed>: SQL", or "execute stmtcache_…: SQL"
+    r"(?:statement|execute|parse|bind)(?:\s+\S+)?:\s*(.*)$",
     re.IGNORECASE,
 )
 POSTGRES_SLOW_MARKER = "# PostgreSQL slow log"

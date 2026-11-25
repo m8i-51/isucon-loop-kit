@@ -76,25 +76,52 @@ def _fingerprint_sql(sql: str) -> str:
     return " ".join(fingerprinted.split())
 
 
+_POSTGRES_SUMMARY_ITEM_RE = re.compile(r"^\d+\.\s+calls=")
+
+
+def _remember_sql(queries: list[str], seen: set[str], stripped: str) -> None:
+    stripped = stripped.strip().rstrip(";")
+    if not stripped:
+        return
+    # Skip bulk seed dumps; they drown out useful app queries in packs.
+    upper = stripped.upper()
+    if upper.startswith("INSERT") and "VALUES" in upper and stripped.count("(") > 3:
+        return
+    if len(stripped) > SQL_EXTRACT_MAX_CHARS:
+        stripped = stripped[: SQL_EXTRACT_MAX_CHARS - 3] + "..."
+    fingerprint = _fingerprint_sql(stripped)
+    if fingerprint not in seen:
+        seen.add(fingerprint)
+        queries.append(stripped)
+
+
 def _extract_sql_lines(slow_txt: str) -> list[str]:
     queries: list[str] = []
     seen: set[str] = set()
-    for line in slow_txt.splitlines():
-        stripped = line.strip().rstrip(";")
+    lines = slow_txt.splitlines()
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if _POSTGRES_SUMMARY_ITEM_RE.match(stripped):
+            index += 1
+            while index < len(lines) and not lines[index].strip():
+                index += 1
+            if index < len(lines):
+                sql = lines[index].strip()
+                if (
+                    sql
+                    and not sql.startswith("#")
+                    and not _POSTGRES_SUMMARY_ITEM_RE.match(sql)
+                ):
+                    _remember_sql(queries, seen, sql)
+            index += 1
+            continue
+        index += 1
         if not stripped or stripped.startswith("#"):
             continue
-        if not SQL_LINE_RE.match(stripped):
+        if not SQL_LINE_RE.match(stripped.rstrip(";")):
             continue
-        # Skip bulk seed dumps; they drown out useful app queries in packs.
-        upper = stripped.upper()
-        if upper.startswith("INSERT") and "VALUES" in upper and stripped.count("(") > 3:
-            continue
-        if len(stripped) > SQL_EXTRACT_MAX_CHARS:
-            stripped = stripped[: SQL_EXTRACT_MAX_CHARS - 3] + "..."
-        fingerprint = _fingerprint_sql(stripped)
-        if fingerprint not in seen:
-            seen.add(fingerprint)
-            queries.append(stripped)
+        _remember_sql(queries, seen, stripped)
     return queries
 
 

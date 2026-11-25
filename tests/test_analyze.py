@@ -325,6 +325,8 @@ SYNTHETIC_POSTGRES_SLOW = """\
 2026-08-09 12:00:00.000 UTC [10] LOG:  duration: 10.000 ms  statement: SELECT id FROM accounts WHERE id = 1;
 2026-08-09 12:00:01.000 UTC [10] LOG:  duration: 30.000 ms  statement: SELECT id FROM accounts WHERE id = 1;
 2026-08-09 12:00:02.000 UTC [11] LOG:  duration: 5.500 ms  execute <unnamed>: UPDATE sessions SET seen_at = now() WHERE id = 2;
+2026-08-09 12:00:02.500 UTC [14] app@app LOG:  duration: 475.237 ms  execute stmtcache_1bc66df99f09b4f28d1a460009e9ebfc769f5b7b1788275e: SELECT id FROM users WHERE id=$1 AND status='active' FOR NO KEY UPDATE;
+2026-08-09 12:00:02.800 UTC [15] LOG:  duration: 735.570 ms  statement: LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE;
 2026-08-09 12:00:03.000 UTC [12] app@app LOG:  duration: 1000.000 ms  statement: SELECT id FROM reports WHERE day = '2026-08-09';
 2026-08-09 12:00:04.000 UTC [13] LOG:  duration: 9.000 ms  statement: INSERT INTO events VALUES (1),(2),(3),(4),(5);
 """
@@ -346,6 +348,11 @@ def test_fallback_postgres_summary_ranks_by_total_duration(tmp_path: Path):
     assert "calls=2" in summary
     assert "total_ms=40.000" in summary
     assert "total_ms=1000.000" in summary
+    assert "stmtcache_" not in summary
+    assert "FROM users" in summary
+    assert "total_ms=475.237" in summary
+    assert "LOCK TABLE users" in summary
+    assert "total_ms=735.570" in summary
     assert "INSERT INTO events" not in summary
 
 
