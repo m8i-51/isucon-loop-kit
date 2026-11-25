@@ -202,6 +202,19 @@ def test_parse_alp_stdout_tsv_with_header():
     assert parsed[0]["sum"] == "1.2"
 
 
+def test_parse_alp_stdout_tsv_title_case_header():
+    text = "Count\tUri\tSum\tAvg\n2\t/api/foo\t1.2\t0.6\n"
+    parsed = parse_alp_stdout(text)
+    assert parsed is not None
+    assert parsed[0]["uri"] == "/api/foo"
+    assert parsed[0]["count"] == "2"
+    assert parsed[0]["sum"] == "1.2"
+
+
+def test_parse_alp_stdout_tsv_header_only_returns_none():
+    assert parse_alp_stdout("Count\tUri\tSum\tAvg\n") is None
+
+
 def test_parse_alp_stdout_json_header_matrix():
     text = (
         '[["count","uri","sum","avg"],'
@@ -211,6 +224,38 @@ def test_parse_alp_stdout_json_header_matrix():
     assert parsed is not None
     assert parsed[0]["uri"] == "/api/foo"
     assert parsed[0]["sum"] == 1.2
+
+
+def test_run_analyze_falls_back_when_alp_prints_header_only(
+    tmp_path: Path, monkeypatch
+):
+    """alp 1.x title-case TSV with no rows must not crash; use the LTSV fallback."""
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / "out" / "raw" / "20260809-120000"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "access.log").write_text(
+        (FIXTURES / "sample_access.ltsv").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (raw_dir / "mysql-slow.log").write_text("# empty\n", encoding="utf-8")
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/alp" if name == "alp" else None
+
+    with (
+        patch("isuctl.analyze.shutil.which", side_effect=fake_which),
+        patch("isuctl.analyze.subprocess.run") as run,
+        patch("isuctl.analyze.datetime") as dt,
+    ):
+        run.return_value = type(
+            "R", (), {"returncode": 0, "stdout": "Count\tUri\tSum\tAvg\n", "stderr": ""}
+        )()
+        dt.now.return_value.strftime.return_value = "20260809-130000"
+        out_dir = run_analyze(raw_dir)
+
+    alp = json.loads((out_dir / "alp.json").read_text(encoding="utf-8"))
+    assert alp[0]["uri"] == "/api/foo"
+    assert alp[0]["sum_time"] == pytest.approx(1.2)
 
 
 def test_run_analyze_falls_back_when_alp_times_are_zero(tmp_path: Path, monkeypatch):

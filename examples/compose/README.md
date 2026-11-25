@@ -28,7 +28,7 @@ isuctl rollback --config examples/compose/isucon.example.toml --ref HEAD~1
 
 `bench_command` は `docker compose run` のコマンド引数です。compose 側でベンチバイナリを `entrypoint` にしているときは、フラグだけを書きます。
 
-Alpine の nginx は LTSV を `/etc/nginx/http.d/` に置きます。`/etc/nginx/conf.d` が無い（または root コンテキストで include される）イメージでも `bootstrap` が選びます。
+Alpine の nginx は LTSV を `/etc/nginx/http.d/` に置きます。`/etc/nginx/conf.d` が無い（または root コンテキストで include される）イメージでも `bootstrap` が選びます。 LTSV には `size:$body_bytes_sent` を含めます。alp はこのフィールドが無い行を無視します。
 
 web / db コンテナを作り直すと、`bootstrap` がコピーしたログ設定は消えます。測る前にもう一度 `bootstrap` します。
 

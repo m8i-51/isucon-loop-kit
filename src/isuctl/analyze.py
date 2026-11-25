@@ -139,8 +139,10 @@ def _parse_alp_tsv(text: str) -> list[dict[str, float | int | str]] | None:
     header = [col.strip() for col in lines[0].split("\t")]
     start = 0
     colnames: list[str]
-    if header and header[0] in {"count", "method", "uri"}:
-        colnames = header
+    # alp --format tsv prints title-case headers (Count, Uri, Sum, Avg).
+    lowered = [name.lower() for name in header]
+    if lowered and lowered[0] in {"count", "method", "uri"}:
+        colnames = lowered
         start = 1
     else:
         colnames = ["count", "uri", "sum", "avg"]

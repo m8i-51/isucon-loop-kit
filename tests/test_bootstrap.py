@@ -33,6 +33,7 @@ def test_template_files_exist_and_match_brief():
     mysql = template_path("mysql_slow.cnf").read_text(encoding="utf-8")
     assert "log_format ltsv" in nginx
     assert "access_log /var/log/nginx/access.ltsv.log ltsv" in nginx
+    assert "size:$body_bytes_sent" in nginx
     assert "slow_query_log = 1" in mysql
     assert "slow_query_log_file = /var/log/mysql/mysql-slow.log" in mysql
     assert "long_query_time = 0.2" in mysql
